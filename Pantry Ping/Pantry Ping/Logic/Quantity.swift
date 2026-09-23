@@ -12,8 +12,20 @@ import Foundation
 enum Quantity {
     static let scale = 1000.0
 
+    // Anything this large is a typo, and converting it to Int would crash.
+    static let maximumValue = 1e12
+
+    // Returns 0 for values that aren't usable (infinite, NaN, or absurdly large);
+    // callers already treat 0 as "invalid amount".
     static func milli(_ value: Double) -> Int {
-        Int((value * scale).rounded())
+        guard value.isFinite, abs(value) < maximumValue else { return 0 }
+        return Int((value * scale).rounded())
+    }
+
+    // Converting "1 portion" of a 3-portion meal gives 333.333…, so three portions would
+    // leave 0.001 behind forever. An amount within a hair of what's left means "the rest".
+    static func snapped(_ milli: Int, toRemaining remaining: Int, tolerance: Int = 5) -> Int {
+        abs(milli - remaining) <= tolerance ? remaining : milli
     }
 
     static func value(_ milli: Int) -> Double {
@@ -29,7 +41,7 @@ enum Quantity {
     static func text(_ value: Double, unit: MeasureUnit) -> String {
         let digits: Int
         switch unit.dimension {
-        case .mass, .volume: digits = value >= 10 ? 0 : 1
+        case .mass, .volume: digits = 1
         case .count, .serving, .portion: digits = 2
         }
         return "\(number(value, maxFractionDigits: digits)) \(unit.label(for: value))"

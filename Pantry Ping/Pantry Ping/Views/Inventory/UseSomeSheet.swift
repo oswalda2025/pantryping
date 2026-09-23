@@ -147,6 +147,11 @@ struct UseSomeSheet: View {
                     usesEverything = false
                 }
             }
+            .onChange(of: unit) { _, newUnit in
+                if usesEverything && newUnit != package.quantityUnit {
+                    usesEverything = false
+                }
+            }
             .onChange(of: package) { _, newPackage in
                 usesEverything = false
                 if !newPackage.converter.enterableUnits.contains(unit) {

@@ -86,15 +86,30 @@ struct NewGroceryView: View {
         // hand, fill it in so the user doesn't type it twice. `lastAutoFill` lets it keep
         // following along as more digits are typed ("5" → "50").
         .onChange(of: product.servingsPerPackageText) { _, newValue in
-            let untouched = lastAutoFill == nil ? package.amountText == "1" : package.amountText == lastAutoFill
-            if untouched, NumberInput.double(newValue) != nil {
+            let untouched = lastAutoFill == nil
+                ? (package.amountText == "1" || package.amountText.isEmpty)
+                : package.amountText == lastAutoFill
+            guard untouched else { return }
+            if NumberInput.double(newValue) != nil {
                 package.amountText = newValue
                 package.unit = .serving
                 lastAutoFill = newValue
+            } else if lastAutoFill != nil {
+                // Servings per package was cleared, so the size it filled in no longer applies.
+                package.amountText = ""
+                lastAutoFill = nil
             }
         }
+        // Typing a serving size (e.g. 62 g) changes which units make sense. Rather than
+        // silently turning the default "1 piece" into "1 serving", ask for the real size.
         .onChange(of: units) { _, newUnits in
-            if !newUnits.contains(package.unit) { package.unit = .serving }
+            if !newUnits.contains(package.unit) {
+                let weightOrVolume = product.servingSize != nil ? product.servingUnit.baseUnit : nil
+                package.unit = weightOrVolume.flatMap { newUnits.contains($0) ? $0 : nil } ?? .serving
+                if package.amountText == "1" && lastAutoFill == nil {
+                    package.amountText = ""
+                }
+            }
         }
     }
 

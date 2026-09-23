@@ -183,7 +183,9 @@ struct MealDetailView: View {
                 Section {
                     LabeledContent(meal.status.displayName,
                                    value: meal.dateResolved?.formatted(date: .abbreviated, time: .omitted) ?? "")
-                    Button("Move Back to Kitchen", systemImage: "arrow.uturn.backward") { meal.status = .active }
+                    if meal.canRestoreToKitchen {
+                        Button("Move Back to Kitchen", systemImage: "arrow.uturn.backward") { meal.status = .active }
+                    }
                 }
             }
 
@@ -372,6 +374,19 @@ struct MealStorageFields: View {
     @Binding var hasUseByDate: Bool
     @Binding var useByDate: Date
     @Binding var source: ExpirationSource
+    // The exact day that was filled in from the suggestion. A date only stays "suggested"
+    // while it's still exactly this day.
+    @State private var appliedSuggestionDate: Date?
+
+    init(storage: Binding<StorageLocation>, preparedDate: Date, hasUseByDate: Binding<Bool>,
+         useByDate: Binding<Date>, source: Binding<ExpirationSource>) {
+        _storage = storage
+        self.preparedDate = preparedDate
+        _hasUseByDate = hasUseByDate
+        _useByDate = useByDate
+        _source = source
+        _appliedSuggestionDate = State(initialValue: source.wrappedValue == .suggested ? useByDate.wrappedValue : nil)
+    }
 
     private var suggestion: StorageSuggestion? {
         StorageGuidance.suggestion(forPreparedMealIn: storage)
@@ -397,11 +412,7 @@ struct MealStorageFields: View {
             Section {
                 Text(suggestion.message).font(.callout)
                 Button("Use Suggestion: \(suggestion.date(from: preparedDate).formatted(date: .abbreviated, time: .omitted))") {
-                    withAnimation {
-                        useByDate = suggestion.date(from: preparedDate)
-                        hasUseByDate = true
-                    }
-                    source = .suggested
+                    applySuggestion()
                 }
             } header: {
                 Text("General Guidance · \(suggestion.source)")
@@ -421,10 +432,37 @@ struct MealStorageFields: View {
         }
         // Editing a suggested date by hand makes it the user's own date.
         .onChange(of: useByDate) { _, newDate in
-            if source == .suggested, let suggestion,
-               !Calendar.current.isDate(newDate, inSameDayAs: suggestion.date(from: preparedDate)) {
+            if source == .suggested,
+               !(appliedSuggestionDate.map { Calendar.current.isDate(newDate, inSameDayAs: $0) } ?? false) {
                 source = .entered
+                appliedSuggestionDate = nil
             }
+        }
+        // A suggestion depends on where the meal is stored and when it was made. If either
+        // changes, recompute it — or remove it when the new storage has no general rule.
+        .onChange(of: storage) { _, _ in refreshSuggestion() }
+        .onChange(of: preparedDate) { _, _ in refreshSuggestion() }
+    }
+
+    private func applySuggestion() {
+        guard let suggestion else { return }
+        let date = suggestion.date(from: preparedDate)
+        appliedSuggestionDate = date
+        source = .suggested
+        withAnimation {
+            useByDate = date
+            hasUseByDate = true
+        }
+    }
+
+    private func refreshSuggestion() {
+        guard source == .suggested else { return }
+        if suggestion != nil {
+            applySuggestion()
+        } else {
+            appliedSuggestionDate = nil
+            source = .entered
+            withAnimation { hasUseByDate = false }
         }
     }
 }

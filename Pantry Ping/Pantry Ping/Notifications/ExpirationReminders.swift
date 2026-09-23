@@ -209,3 +209,20 @@ enum ExpirationReminders {
         return ("\(entries.count) items need attention", parts.joined(separator: " · "))
     }
 }
+
+// Turning groceries and meals into reminder items lives here (not in a view) so it can be
+// tested. Only items still in the kitchen with a date qualify — finishing or throwing
+// something away is what stops its reminders.
+extension ExpirationReminders {
+    static func items(from packages: [GroceryItem], meals: [PreparedMeal]) -> [ReminderItem] {
+        let groceries = packages.compactMap { item -> ReminderItem? in
+            guard item.status == .active, let date = item.expirationDate else { return nil }
+            return ReminderItem(name: item.displayName, expirationDate: date, isSuggested: item.expirationSource == .suggested)
+        }
+        let prepared = meals.compactMap { meal -> ReminderItem? in
+            guard meal.status == .active, let date = meal.expirationDate else { return nil }
+            return ReminderItem(name: meal.name, expirationDate: date, isSuggested: meal.expirationSource == .suggested)
+        }
+        return groceries + prepared
+    }
+}

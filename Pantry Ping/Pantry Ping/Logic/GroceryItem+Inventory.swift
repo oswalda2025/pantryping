@@ -62,7 +62,7 @@ extension GroceryItem {
         guard let base = converter.toBase(value, from: unit) else {
             throw InventoryError.noConversion(from: unit)
         }
-        let milli = Quantity.milli(base)
+        let milli = Quantity.snapped(Quantity.milli(base), toRemaining: remainingAmountMilli)
         guard milli > 0 else { throw InventoryError.invalidAmount }
         return milli
     }
@@ -116,7 +116,13 @@ extension GroceryItem {
         addEvent(.discarded, date: date, detail: remainingAmountMilli > 0 ? "\(remainingText) left" : "")
     }
 
+    // An emptied package has nothing to move back, so it can't be restored.
+    var canRestoreToKitchen: Bool {
+        status != .active && remainingAmountMilli > 0
+    }
+
     func restoreToKitchen(on date: Date = .now) {
+        guard remainingAmountMilli > 0 else { return }
         status = .active
         addEvent(.restored, date: date)
     }

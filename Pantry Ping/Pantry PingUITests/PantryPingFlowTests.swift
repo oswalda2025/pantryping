@@ -5,79 +5,31 @@
 
 import XCTest
 
-// End-to-end checks that tap through the real app, like a user would.
+// End-to-end checks of the core kitchen flows, tapping through the real app.
 // UI tests still use XCTest: Swift Testing doesn't drive the UI yet.
-final class PantryPingFlowTests: XCTestCase {
-    private var app: XCUIApplication!
-
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        // Empty in-memory database, and reminders off so no permission alert interrupts.
-        app.launchArguments = ["-uiTesting", "-remindersEnabled", "NO"]
-        app.launch()
-    }
-
-    // Rows combine their text for accessibility ("Milk, Fridge, Expires tomorrow"),
-    // so find them by how their label starts.
-    private func row(_ name: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
-    }
-
-    // Taps `button` until `expected` appears. On a busy simulator the first tap right
-    // after launch or an animation is occasionally dropped.
-    private func tap(_ button: XCUIElement, until expected: XCUIElement, attempts: Int = 3) {
-        for _ in 0..<attempts {
-            if button.waitForExistence(timeout: 5) { button.tap() }
-            if expected.waitForExistence(timeout: 5) { return }
-        }
-        XCTFail("\(expected) never appeared after tapping \(button)")
-    }
-
-    private func openAddForm() {
-        tap(app.buttons["Add Grocery"].firstMatch, until: app.textFields["Name, e.g. Milk"])
-    }
-
-    // Search narrows the list so the row is on screen (lists only create visible rows).
-    private func search(_ text: String) {
-        let field = app.searchFields.firstMatch
-        tap(field, until: app.keyboards.firstMatch)
-        field.typeText(text)
-    }
-
-    // Saves a screenshot into the test results, handy for reviewing the design.
-    private func keepScreenshot(named name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
-    }
-
-    private func loadSamples() {
-        tap(app.buttons["Try Sample Groceries"], until: row("Milk"))
-    }
+final class PantryPingFlowTests: PantryPingUITestCase {
 
     func testEmptyStateIsShownOnFirstLaunch() {
         XCTAssertTrue(app.staticTexts["Your kitchen is empty"].waitForExistence(timeout: 5))
     }
 
     func testAddGroceryShowsCountdown() {
-        openAddForm()
-        let nameField = app.textFields["Name, e.g. Milk"]
-        nameField.tap()
-        nameField.typeText("Oat Milk")
-        app.buttons["+3 days"].tap()
-        app.navigationBars["Add Grocery"].buttons["Save"].tap()
+        openNewProductForm()
+        type("Oat Milk", into: app.textFields["Product name, e.g. Protein Granola"])
+        let quickPick = app.buttons["+3 days"]
+        scrollTo(quickPick)
+        quickPick.tap()
+        app.navigationBars["New Product"].buttons["Save"].tap()
 
         let newRow = row("Oat Milk")
-        XCTAssertTrue(newRow.waitForExistence(timeout: 5))
+        XCTAssertTrue(newRow.waitForExistence(timeout: 10))
         XCTAssertTrue(newRow.label.contains("3 days left"), "Row label was: \(newRow.label)")
         XCTAssertTrue(app.staticTexts["Use Soon"].exists)
     }
 
     func testSaveIsDisabledWithoutAName() {
-        openAddForm()
-        let save = app.buttons["Save"].firstMatch
+        openNewProductForm()
+        let save = app.navigationBars["New Product"].buttons["Save"]
         XCTAssertTrue(save.exists)
         XCTAssertFalse(save.isEnabled)
     }
@@ -96,17 +48,18 @@ final class PantryPingFlowTests: XCTestCase {
         XCTAssertTrue(chicken.label.contains("Frozen 4 days ago"), "Row label was: \(chicken.label)")
     }
 
-    func testMarkAsUsedMovesItemToHistory() {
+    func testFinishedMovesItemToHistory() {
         loadSamples()
-        tap(row("Milk"), until: app.buttons["Mark as Used"])
-        app.buttons["Mark as Used"].tap()
+        tap(row("Milk"), until: app.buttons["Finished"])
+        app.buttons["Finished"].tap()
 
         XCTAssertTrue(row("Spinach").waitForExistence(timeout: 5))
         XCTAssertFalse(row("Milk").exists)
 
+        tap(app.buttons["History"].firstMatch, until: app.segmentedControls.buttons["Finished"])
         let historyRow = row("Milk")
-        tap(app.buttons["History"].firstMatch, until: historyRow)
-        XCTAssertTrue(historyRow.label.contains("Used today"), "History label was: \(historyRow.label)")
+        tap(app.segmentedControls.buttons["Finished"], until: historyRow)
+        XCTAssertTrue(historyRow.label.contains("Finished today"), "History label was: \(historyRow.label)")
     }
 
     func testFreezeMovesItemToFreezer() {
@@ -118,15 +71,17 @@ final class PantryPingFlowTests: XCTestCase {
         keepScreenshot(named: "Freeze sheet")
         sheetBar.buttons["Freeze"].tap()
 
-        XCTAssertTrue(app.staticTexts["Frozen today"].waitForExistence(timeout: 5))
+        XCTAssertTrue(element(containing: "Frozen today").waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Thaw"].exists)
     }
 
     func testDeleteFromDetailRemovesItem() {
         loadSamples()
         search("Rice")
-        tap(row("Rice"), until: app.buttons["Delete Grocery"])
-        app.buttons["Delete Grocery"].tap()
+        tap(row("Rice"), until: app.buttons["Use Some"])
+        let delete = app.buttons["Delete Grocery"]
+        scrollTo(delete)
+        delete.tap()
 
         let confirm = app.buttons["Delete"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))

@@ -60,6 +60,10 @@ struct GroceryRow: View {
         if item.hasMeaningfulAmount {
             parts.append(item.remainingText)
         }
+        // With several open packages of the same product, the purchase date tells them apart.
+        if (item.product?.activePackages.count ?? 0) > 1 {
+            parts.append("Bought \(item.purchaseDate.formatted(.dateTime.day().month(.abbreviated)))")
+        }
         return parts.joined(separator: " · ")
     }
 

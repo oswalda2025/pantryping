@@ -88,10 +88,16 @@ class PantryPingUITestCase: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "\(label),")).firstMatch
     }
 
-    // Picks `option` from a menu-style picker.
+    // Picks `option` from a menu-style picker, then confirms the picker now shows it
+    // (on a slow simulator a menu tap is occasionally lost).
     func choose(_ option: String, inPicker picker: XCUIElement) {
         let item = app.buttons.matching(NSPredicate(format: "label == %@", option)).firstMatch
-        tap(picker, until: item)
-        item.tap()
+        for _ in 0..<3 {
+            tap(picker, until: item)
+            item.tap()
+            sleep(1)
+            if picker.label.hasSuffix(", \(option)") { return }
+        }
+        XCTFail("Picker never showed \(option); it shows \(picker.label)")
     }
 }

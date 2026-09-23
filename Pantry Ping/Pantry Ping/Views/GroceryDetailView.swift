@@ -208,8 +208,14 @@ struct GroceryDetailView: View {
             if let resolved = item.dateResolved {
                 LabeledContent(item.status.displayName, value: resolved.formatted(date: .abbreviated, time: .omitted))
             }
-            Button("Move Back to Kitchen", systemImage: "arrow.uturn.backward") {
-                item.restoreToKitchen()
+            if item.canRestoreToKitchen {
+                Button("Move Back to Kitchen", systemImage: "arrow.uturn.backward") {
+                    item.restoreToKitchen()
+                }
+            } else if item.remainingAmountMilli == 0 {
+                Text("All of it was used, so there's nothing to move back. Undo a Food Log entry to put an amount back.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }

@@ -203,9 +203,17 @@ struct IngredientPickerSheet: View {
     @State private var amountText = ""
     @State private var unit = MeasureUnit.serving
     @State private var otherName = ""
+    @State private var searchText = ""
+    // Whether the search field is active. Picking an ingredient closes it so the
+    // Add button (hidden while searching) comes back.
+    @State private var isSearching = false
 
+    // Soonest-expiring first, narrowed by the search field.
     private var sortedPackages: [GroceryItem] {
-        GroceryItem.sortedByUrgency(packages, now: now)
+        let matching = searchText.isEmpty
+            ? packages
+            : packages.filter { $0.displayName.localizedStandardContains(searchText) }
+        return GroceryItem.sortedByUrgency(matching, now: now)
     }
 
     private var units: [MeasureUnit] {
@@ -242,11 +250,13 @@ struct IngredientPickerSheet: View {
                 if fromKitchen {
                     Section {
                         if sortedPackages.isEmpty {
-                            Text("Nothing in your kitchen yet.").foregroundStyle(.secondary)
+                            Text(searchText.isEmpty ? "Nothing in your kitchen yet." : "No matches in your kitchen.")
+                                .foregroundStyle(.secondary)
                         }
                         ForEach(sortedPackages) { package in
                             Button {
                                 selected = package
+                                isSearching = false
                                 if !package.converter.enterableUnits.contains(unit) {
                                     unit = package.converter.enterableUnits.first ?? package.quantityUnit
                                 }
@@ -264,6 +274,8 @@ struct IngredientPickerSheet: View {
                                     }
                                 }
                             }
+                            // Keeps row text in normal colors instead of button blue.
+                            .tint(.primary)
                         }
                     } header: {
                         Text("Use Soonest First")
@@ -299,6 +311,8 @@ struct IngredientPickerSheet: View {
             }
             .navigationTitle("Add Ingredient")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, isPresented: $isSearching,
+                        placement: .navigationBarDrawer(displayMode: .always), prompt: "Search your kitchen")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

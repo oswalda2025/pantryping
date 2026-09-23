@@ -122,7 +122,9 @@ extension GroceryItem {
         let old = expirationDate
         expirationDate = day
         expirationSource = day == nil ? .entered : source
-        if isCorrection && foodState == .fresh {
+        // Only while the original still matches the current date: once a date was changed
+        // on purpose (e.g. "Still have it"), the original package date must stay put.
+        if isCorrection && foodState == .fresh && originalExpirationDate == old {
             originalExpirationDate = day
         }
         if old != day {

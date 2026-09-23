@@ -14,8 +14,11 @@ struct ContentView: View {
 
     // @Environment reads values the system provides — here, whether the app is on screen.
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modelContext) private var modelContext
 
     @AppStorage("remindersEnabled") private var remindersEnabled = true
+    // Set by DatabaseLoader if saved data couldn't be opened; shown once, then cleared.
+    @AppStorage(DatabaseLoader.recoveryNoteKey) private var recoveryNote = ""
 
     // Active groceries and meals with a date — the only ones reminders care about.
     // Finished or thrown-away items drop out of these queries, which stops their reminders.
@@ -27,17 +30,7 @@ struct ContentView: View {
     // Plain copies of what reminders need. When any name, date, or date source changes,
     // this array changes, and the `.task(id:)` below reschedules everything.
     private var reminderItems: [ReminderItem] {
-        let groceries = datedGroceries.compactMap { item in
-            item.expirationDate.map {
-                ReminderItem(name: item.displayName, expirationDate: $0, isSuggested: item.expirationSource == .suggested)
-            }
-        }
-        let meals = datedMeals.compactMap { meal in
-            meal.expirationDate.map {
-                ReminderItem(name: meal.name, expirationDate: $0, isSuggested: meal.expirationSource == .suggested)
-            }
-        }
-        return groceries + meals
+        ExpirationReminders.items(from: datedGroceries, meals: datedMeals)
     }
 
     var body: some View {
@@ -60,10 +53,22 @@ struct ContentView: View {
             }
         }
         .environment(\.now, now)
+        .alert("Saved Data Couldn't Be Opened", isPresented: Binding(
+            get: { !recoveryNote.isEmpty },
+            set: { if !$0 { recoveryNote = "" } }
+        )) {
+            Button("OK") { recoveryNote = "" }
+        } message: {
+            Text(recoveryNote)
+        }
         // Refresh "now" whenever the app comes back to the foreground...
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 now = .now
+            } else {
+                // SwiftData saves automatically, but saving as the app leaves the screen
+                // guarantees nothing is lost if iOS closes it in the background.
+                try? modelContext.save()
             }
         }
         // ...and at midnight or after a time-zone change while it stays open.

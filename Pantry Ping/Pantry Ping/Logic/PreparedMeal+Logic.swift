@@ -89,9 +89,13 @@ extension PreparedMeal {
             base = converter.toBase(value, from: unit)
         }
         guard let base else { throw InventoryError.noConversion(from: unit) }
-        let milli = Quantity.milli(base)
+        let milli = Quantity.snapped(Quantity.milli(base), toRemaining: remainingAmountMilli)
         guard milli > 0 else { throw InventoryError.invalidAmount }
         return milli
+    }
+
+    var canRestoreToKitchen: Bool {
+        status != .active && remainingAmountMilli > 0
     }
 
     // "3 portions · 450 g" when both are known.
@@ -207,7 +211,11 @@ enum MealPrep {
         var milliByDraft: [UUID: Int] = [:]
         var totalByPackage: [PersistentIdentifier: Int] = [:]
         for draft in ingredients {
-            guard let package = draft.package else { continue }
+            guard let package = draft.package else {
+                guard draft.amount > 0, Quantity.milli(draft.amount) > 0 else { throw InventoryError.invalidAmount }
+                continue
+            }
+            guard package.status == .active else { throw InventoryError.notActive }
             let milli = try package.milli(for: draft.amount, unit: draft.unit)
             milliByDraft[draft.id] = milli
             totalByPackage[package.persistentModelID, default: 0] += milli
@@ -222,12 +230,12 @@ enum MealPrep {
         meal.totalWeightGrams = weight
         meal.quantityUnitRaw = (weight != nil ? MeasureUnit.gram : MeasureUnit.portion).rawValue
         let starting = Quantity.milli(weight ?? portions ?? 1)
+        guard starting > 0 else { throw InventoryError.invalidAmount }
         meal.startingAmountMilli = starting
         meal.remainingAmountMilli = starting
         meal.expirationDate = expirationDate.map { CalendarDay.noon($0) }
         meal.expirationSource = expirationDate == nil ? .entered : expirationSource
         meal.notes = notes
-        context.insert(meal)
 
         // 3. Take ingredients out of inventory and record them on the meal.
         var total = NutritionTotal()
@@ -245,6 +253,9 @@ enum MealPrep {
             ingredient.meal = meal
             total.add(ingredient.nutrition)
         }
+
+        // Inserted last, so nothing half-built is ever saved.
+        context.insert(meal)
 
         // 4. Nutrition: typed-in values win; otherwise add up ingredients, keeping only
         //    values every ingredient had (an incomplete sum is never shown as exact).

@@ -133,10 +133,12 @@ struct HistoryView: View {
                     HistoryRow(item: item, now: now)
                 }
                 .swipeActions(edge: .leading) {
-                    Button("Restore", systemImage: "arrow.uturn.backward") {
-                        withAnimation { item.restoreToKitchen() }
+                    if item.canRestoreToKitchen {
+                        Button("Restore", systemImage: "arrow.uturn.backward") {
+                            withAnimation { item.restoreToKitchen() }
+                        }
+                        .tint(.blue)
                     }
-                    .tint(.blue)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button("Delete", systemImage: "trash") {

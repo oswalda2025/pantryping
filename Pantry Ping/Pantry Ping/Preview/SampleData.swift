@@ -6,8 +6,9 @@
 import Foundation
 import SwiftData
 
-// Demo groceries covering every urgency level and food state. Used by SwiftUI previews
-// and by the "Try Sample Groceries" button, so the app can be explored without typing.
+// Demo data covering every urgency level, food states, a part-used package with nutrition,
+// a prepared meal, and a shopping list. Used by SwiftUI previews and the
+// "Try Sample Groceries" button, so the app can be explored without typing.
 enum SampleData {
     // A throwaway in-memory database for #Preview canvases. `isStoredInMemoryOnly`
     // means nothing is written to disk.
@@ -37,25 +38,84 @@ enum SampleData {
             calendar.date(byAdding: .day, value: offset, to: now) ?? now
         }
 
-        let items: [GroceryItem] = [
-            GroceryItem(name: "Strawberries", category: .produce, purchaseDate: day(-5), expirationDate: day(-1)),
-            GroceryItem(name: "Spinach", category: .produce, purchaseDate: day(-4), expirationDate: day(0)),
-            GroceryItem(name: "Milk", category: .dairyEggs, purchaseDate: day(-6), expirationDate: day(1)),
-            GroceryItem(name: "Sourdough Bread", category: .bakery, storageLocation: .pantry, purchaseDate: day(-2), expirationDate: day(2)),
-            GroceryItem(name: "Greek Yogurt", category: .dairyEggs, purchaseDate: day(-3), expirationDate: day(3)),
-            GroceryItem(name: "Bell Peppers", category: .produce, quantity: 3, purchaseDate: day(-1), expirationDate: day(6)),
-            GroceryItem(name: "Eggs", category: .dairyEggs, quantity: 12, purchaseDate: day(-2), expirationDate: day(18)),
-            GroceryItem(name: "Rice", category: .dryCanned, storageLocation: .pantry, purchaseDate: day(-20)),
-        ]
-
-        let chicken = GroceryItem(name: "Chicken Breast", category: .meatSeafood, purchaseDate: day(-5), expirationDate: day(-3))
-        chicken.changeFoodState(to: .frozen, newExpirationDate: nil, on: day(-4))
-
-        let pasta = GroceryItem(name: "Pasta Bake", category: .leftovers, purchaseDate: day(-1))
-        pasta.changeFoodState(to: .cooked, newExpirationDate: day(2), on: day(-1))
-
-        for item in items + [chicken, pasta] {
-            context.insert(item)
+        // Reuse saved products with the same name, so loading samples twice doesn't
+        // duplicate the catalog.
+        let existing = (try? context.fetch(FetchDescriptor<Product>())) ?? []
+        func product(_ name: String, _ category: GroceryCategory, serving: (Double, MeasureUnit)? = nil,
+                     servingsPerPackage: Double? = nil, nutrition: NutritionFacts = .empty) -> Product {
+            if let match = existing.first(where: { $0.name == name }) { return match }
+            let product = Product(name: name, category: category)
+            product.servingSize = serving?.0
+            product.servingUnit = serving?.1
+            product.servingsPerPackage = servingsPerPackage
+            product.nutrition = nutrition
+            context.insert(product)
+            return product
         }
+
+        // `@discardableResult` means callers may ignore the returned package.
+        @discardableResult
+        func buy(_ product: Product, _ amount: Double = 1, _ unit: MeasureUnit = .piece,
+                 in location: StorageLocation = .fridge, bought: Int, expires: Int?) -> GroceryItem? {
+            guard let package = try? product.makePackage(
+                amount: amount, unit: unit, purchaseDate: day(bought), price: nil,
+                expirationDate: expires.map(day), storageLocation: location
+            ) else { return nil }
+            context.insert(package)
+            return package
+        }
+
+        buy(product("Strawberries", .produce), bought: -5, expires: -1)
+        buy(product("Spinach", .produce), bought: -4, expires: 0)
+        buy(product("Milk", .dairyEggs), bought: -6, expires: 1)
+        buy(product("Sourdough Bread", .bakery), in: .pantry, bought: -2, expires: 2)
+        buy(product("Greek Yogurt", .dairyEggs, serving: (170, .gram), servingsPerPackage: 1,
+                    nutrition: NutritionFacts(calories: 100, carbs: 6, protein: 17, fat: 0.7)),
+            1, .serving, bought: -3, expires: 3)
+        buy(product("Bell Peppers", .produce), 3, bought: -1, expires: 6)
+        buy(product("Eggs", .dairyEggs), 12, bought: -2, expires: 18)
+
+        let rice = product("Rice", .dryCanned, serving: (45, .gram),
+                           nutrition: NutritionFacts(calories: 160, carbs: 36, protein: 3, fat: 0))
+        let ricePackage = buy(rice, 1000, .gram, in: .pantry, bought: -20, expires: nil)
+
+        // The granola example: 5 × 62 g servings, with 31 g already eaten today.
+        let granola = product("Quaker Protein Granola", .dryCanned, serving: (62, .gram), servingsPerPackage: 5,
+                              nutrition: NutritionFacts(calories: 260, carbs: 44, protein: 10, fat: 7))
+        if let box = buy(granola, 5, .serving, in: .pantry, bought: -3, expires: 60) {
+            _ = try? box.use(31_000, reason: .ate, on: now)
+        }
+
+        if let chicken = buy(product("Chicken Breast", .meatSeafood), 500, .gram, bought: -5, expires: -3) {
+            chicken.changeFoodState(to: .frozen, newExpirationDate: nil, on: day(-4))
+        }
+        if let pasta = buy(product("Pasta Bake", .leftovers), bought: -1, expires: nil) {
+            pasta.changeFoodState(to: .cooked, newExpirationDate: day(2), on: day(-1))
+        }
+
+        // A meal-prep batch made yesterday from the rice, with the fridge suggestion applied.
+        if let ricePackage {
+            let suggested = StorageGuidance.suggestion(forPreparedMealIn: .fridge)?.date(from: day(-1))
+            if let meal = try? MealPrep.makeMeal(
+                name: "Chicken Rice Bowls",
+                ingredients: [
+                    IngredientDraft(name: "Rice", package: ricePackage, amount: 180, unit: .gram),
+                    IngredientDraft(name: "Lemon", package: nil, amount: 1, unit: .piece),
+                ],
+                yield: .init(portions: 4, cookedWeightGrams: nil),
+                preparedDate: day(-1),
+                storageLocation: .fridge,
+                expirationDate: suggested,
+                expirationSource: .suggested,
+                manualBatchNutrition: NutritionFacts(calories: 2200, carbs: 240, protein: 160, fat: 50),
+                notes: "",
+                in: context
+            ) {
+                _ = try? meal.eat(1000, on: day(-1))
+            }
+        }
+
+        context.insert(ShoppingItem(name: "Bananas"))
+        ShoppingList.add(granola, in: context)
     }
 }
