@@ -42,7 +42,7 @@ There are also two supporting types:
 | **Finished / Threw Away** | The item leaves the kitchen and stops getting reminders. Its history is kept, and you can restore it. |
 | **Food states** | Open, Cook, Freeze, and Thaw. Each is recorded in the package's history, and the original package date is kept. |
 | **Suggested timelines** | A few general-guidance suggestions, **labeled "suggested" everywhere**: in rows, in the detail view, and in reminders. See the food-safety notes below. |
-| **Meals tab** | Create a meal-prep batch from groceries in your kitchen; this takes the right amounts out of the right packages. You can also add untracked ingredients or enter a meal by hand without macros. Set portions and/or cooked weight. Nutrition is shown per batch, per portion, and per 100 g when there's enough data. **Eat a Portion** reduces what's left and logs what you ate. |
+| **Meals tab** | Create a meal-prep batch from groceries in your kitchen; this takes the right amounts out of the right packages. The ingredient picker lists the soonest-expiring items first and has a search field. You can also add untracked ingredients or enter a meal by hand without macros. Set portions and/or cooked weight. Nutrition is shown per batch, per portion, and per 100 g when there's enough data. **Eat a Portion** reduces what's left and logs what you ate. |
 | **Log tab** | Your daily food log, with day-by-day navigation. Totals mark missing values ("520+ kcal (1 not entered)") instead of counting them as zero. Swipe to undo an entry, which puts the amount back where it came from. |
 | **Shopping tab** | Quick-add items; names are matched to saved products. **Buy** opens the purchase form, and the item leaves the list once it's bought. |
 | **History tab** | **Purchases** groups everything by the day you bought it, with package sizes, prices, and daily totals. **Finished** lists items you finished or threw away, with counts and restore. |
@@ -72,6 +72,10 @@ There are also two supporting types:
   - `PantryPingMigrationPlan` upgrades old data: each old item becomes a package counted in pieces, items with the same name share one saved product, and a "Bought" history line is added.
   - A unit test opens a real V1 database file to check this, and it was also checked on an existing simulator install.
 - **Every stored property has a default**, relationships are optional, and enums are saved as raw strings that must never be renamed.
+- **If saved data ever can't be opened**, the app doesn't crash on every launch. It moves the unreadable file aside as a backup (never deleting it), starts fresh, and shows a one-time message.
+- **The app saves when it leaves the screen**, so nothing is lost if iOS closes it in the background.
+- **An amount within 0.005 of what's left counts as "the rest"**, so the last of three portions finishes a meal exactly.
+- **Emptied packages can't be moved back to the kitchen.**
 - **The package keeps its own copy of the product name**, so the food log and history still read correctly if a product is later deleted.
 - **Usage entries save the nutrition for the amount at the time it was logged**, so editing a product later doesn't rewrite past logs.
 - **"Finished" reuses the V1 status value `used`** to stay compatible with existing data.
@@ -90,6 +94,15 @@ These are deferred, following the roadmap:
 - Spending insights and roommate cost-splitting
 - Cloud sync
 - A verified food-storage database
+
+## Tests
+
+| Kind | What they cover |
+| --- | --- |
+| **Unit tests** (Swift Testing) | Unit conversions; the 310 g → 279 g / 4.5 servings path; exact-to-zero repeated use; fractional servings; invalid, huge, and over-the-limit amounts; separate packages and buying again; missing nutrition; only "Ate" counting in the log; undo; reminders stopping for finished items; suggested labels; guidance rules; meal prep (correct packages, all-or-nothing validation, incomplete nutrition, portions and weight); a real on-disk V1 → V2 migration; and recovery from a corrupted database. |
+| **UI tests** (XCTest, driving the real app) | The granola path end to end; adding a grocery; Save disabled with no name; urgency grouping; Finished → History; Threw Away → History; Freeze; delete; filter and search; shopping list → purchase; meal prep from inventory → eat → log; invalid amounts and missing macros; empty states on every tab; data surviving an app restart. |
+
+`ScreenshotTour` is a UI test that only saves screenshots of every screen for design review.
 
 ## Development notes
 

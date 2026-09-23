@@ -124,9 +124,12 @@ struct GroceryDetailView: View {
                     ProductThumbnail(data: item.product?.photoData, size: 64)
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Label(item.freshnessText(now: now), systemImage: status.systemImage)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(status == .noDate ? Color.primary : status.tint)
+                    Label {
+                        Text(item.freshnessText(now: now)).foregroundStyle(status.textColor)
+                    } icon: {
+                        Image(systemName: status.systemImage).foregroundStyle(status.tint)
+                    }
+                    .font(.title3.weight(.semibold))
                     Text(summaryLine)
                         .foregroundStyle(.secondary)
                 }

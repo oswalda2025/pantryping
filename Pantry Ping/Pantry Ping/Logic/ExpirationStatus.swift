@@ -87,6 +87,16 @@ enum ExpirationStatus: Int, CaseIterable, Comparable {
         }
     }
 
+    // Text color that stays readable on white: only the two alarming states are colored.
+    // (Yellow text on a white background is too faint to read.)
+    var textColor: Color {
+        switch self {
+        case .expired: .red
+        case .urgent: .orange
+        default: .primary
+        }
+    }
+
     var tint: Color {
         switch self {
         case .expired: .red

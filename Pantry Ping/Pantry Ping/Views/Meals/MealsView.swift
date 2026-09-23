@@ -144,9 +144,12 @@ struct MealDetailView: View {
         let status = meal.expirationStatus(now: now)
         return List {
             Section {
-                Label(meal.freshnessText(now: now), systemImage: status.systemImage)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(status == .noDate ? Color.primary : status.tint)
+                Label {
+                    Text(meal.freshnessText(now: now)).foregroundStyle(status.textColor)
+                } icon: {
+                    Image(systemName: status.systemImage).foregroundStyle(status.tint)
+                }
+                .font(.title3.weight(.semibold))
                 VStack(alignment: .leading, spacing: 6) {
                     Text("\(meal.remainingText) left")
                         .font(.headline)
