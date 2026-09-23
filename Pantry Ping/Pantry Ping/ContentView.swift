@@ -6,7 +6,8 @@
 import SwiftUI
 import SwiftData
 
-// The root of the app: three tabs, plus the app-wide "now" clock.
+// The root of the app: five tabs, plus the app-wide "now" clock and reminder scheduling.
+// Settings and Saved Products open from the Kitchen tab's "More" menu.
 struct ContentView: View {
     // @State lets this view own a value; changing it redraws everything that reads it.
     @State private var now = Date.now
@@ -16,16 +17,27 @@ struct ContentView: View {
 
     @AppStorage("remindersEnabled") private var remindersEnabled = true
 
-    // Active groceries with a date — the only ones reminders care about.
+    // Active groceries and meals with a date — the only ones reminders care about.
+    // Finished or thrown-away items drop out of these queries, which stops their reminders.
     @Query(filter: #Predicate<GroceryItem> { $0.statusRaw == "active" && $0.expirationDate != nil })
     private var datedGroceries: [GroceryItem]
+    @Query(filter: #Predicate<PreparedMeal> { $0.statusRaw == "active" && $0.expirationDate != nil })
+    private var datedMeals: [PreparedMeal]
 
-    // Plain copies of what reminders need. When any name or date changes, this array
-    // changes, and the `.task(id:)` below reschedules everything.
+    // Plain copies of what reminders need. When any name, date, or date source changes,
+    // this array changes, and the `.task(id:)` below reschedules everything.
     private var reminderItems: [ReminderItem] {
-        datedGroceries.compactMap { item in
-            item.expirationDate.map { ReminderItem(name: item.name, expirationDate: $0) }
+        let groceries = datedGroceries.compactMap { item in
+            item.expirationDate.map {
+                ReminderItem(name: item.displayName, expirationDate: $0, isSuggested: item.expirationSource == .suggested)
+            }
         }
+        let meals = datedMeals.compactMap { meal in
+            meal.expirationDate.map {
+                ReminderItem(name: meal.name, expirationDate: $0, isSuggested: meal.expirationSource == .suggested)
+            }
+        }
+        return groceries + meals
     }
 
     var body: some View {
@@ -34,11 +46,17 @@ struct ContentView: View {
             Tab("Kitchen", systemImage: "refrigerator") {
                 HomeView()
             }
+            Tab("Meals", systemImage: "takeoutbag.and.cup.and.straw") {
+                MealsView()
+            }
+            Tab("Log", systemImage: "fork.knife") {
+                FoodLogView()
+            }
+            Tab("Shopping", systemImage: "cart") {
+                ShoppingListView()
+            }
             Tab("History", systemImage: "clock.arrow.circlepath") {
                 HistoryView()
-            }
-            Tab("Settings", systemImage: "gearshape") {
-                SettingsView()
             }
         }
         .environment(\.now, now)

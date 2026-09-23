@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("remindersEnabled") private var remindersEnabled = true
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
     // True when the user has turned notifications off for Pantry Ping in iOS Settings.
@@ -31,7 +32,7 @@ struct SettingsView: View {
                         .font(.callout)
                     }
                 } footer: {
-                    Text("A daily reminder at 9 AM when groceries have 3, 2, 1, or 0 days left.")
+                    Text("A daily reminder at 9 AM when groceries or prepared meals have 3, 2, 1, or 0 days left. Finished and thrown-away items never get reminders.")
                 }
 
                 Section {
@@ -51,6 +52,11 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
             // Re-check whenever the user returns, e.g. after changing it in iOS Settings.
             .task(id: scenePhase) {
                 let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus

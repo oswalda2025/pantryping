@@ -21,7 +21,7 @@ struct Pantry_PingApp: App {
         // `do`/`catch` handles code that can fail (`try`).
         do {
             modelContainer = try ModelContainer(
-                for: Schema(versionedSchema: SchemaV1.self),
+                for: Schema(versionedSchema: SchemaV2.self),
                 migrationPlan: PantryPingMigrationPlan.self,
                 configurations: ModelConfiguration(isStoredInMemoryOnly: isUITesting)
             )

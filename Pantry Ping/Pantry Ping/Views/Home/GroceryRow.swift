@@ -14,22 +14,21 @@ struct GroceryRow: View {
         let status = item.expirationStatus(now: now)
 
         HStack(spacing: 12) {
-            // Icon + text together, so urgency never depends on color alone.
-            Image(systemName: status.systemImage)
-                .font(.title3)
-                .foregroundStyle(status.tint)
-                .frame(width: 28)
-                .accessibilityHidden(true)
+            // The product photo when there is one; otherwise the urgency icon.
+            // Either way the urgency text on the right says it in words.
+            if let photo = item.product?.photoData {
+                ProductThumbnail(data: photo, size: 36)
+            } else {
+                Image(systemName: status.systemImage)
+                    .font(.title3)
+                    .foregroundStyle(status.tint)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(item.name)
-                        .font(.body.weight(.medium))
-                    if item.quantity != 1 {
-                        Text("×\(item.quantity.formatted())")
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                Text(item.displayName)
+                    .font(.body.weight(.medium))
                 Text(locationLine)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -52,10 +51,16 @@ struct GroceryRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    // "Fridge", or "Freezer · Frozen" once the food state has changed.
+    // "Pantry · 279 g · 4.5 servings", or "Freezer · Frozen" once the food state has changed.
     private var locationLine: String {
-        let location = item.storageLocation.displayName
-        return item.foodState == .fresh ? location : "\(location) · \(item.foodState.displayName)"
+        var parts = [item.storageLocation.displayName]
+        if item.foodState != .fresh {
+            parts.append(item.foodState.displayName)
+        }
+        if item.hasMeaningfulAmount {
+            parts.append(item.remainingText)
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func freshnessColor(for status: ExpirationStatus) -> Color {

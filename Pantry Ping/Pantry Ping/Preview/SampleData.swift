@@ -14,7 +14,7 @@ enum SampleData {
     static let previewContainer: ModelContainer = {
         do {
             let container = try ModelContainer(
-                for: Schema(versionedSchema: SchemaV1.self),
+                for: Schema(versionedSchema: SchemaV2.self),
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)
             )
             insertSampleGroceries(into: container.mainContext)

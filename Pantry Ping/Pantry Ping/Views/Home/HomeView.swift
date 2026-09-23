@@ -21,8 +21,11 @@ struct HomeView: View {
     @State private var locationFilter: StorageLocation?
     @State private var searchText = ""
     @State private var isShowingAddForm = false
-    // Setting this to an item presents the "Still have it?" date sheet for it.
+    @State private var isShowingSettings = false
+    @State private var isShowingProducts = false
+    // Setting one of these to an item presents a sheet for it.
     @State private var itemToRedate: GroceryItem?
+    @State private var itemToUse: GroceryItem?
 
     var body: some View {
         // NavigationStack enables pushing to a detail screen and shows the title bar.
@@ -47,13 +50,17 @@ struct HomeView: View {
                                 GroceryRow(item: item)
                             }
                             .swipeActions(edge: .leading) {
-                                Button("Used", systemImage: "checkmark") {
+                                Button("Use Some", systemImage: "minus.circle") {
+                                    itemToUse = item
+                                }
+                                .tint(.blue)
+                                Button("Finished", systemImage: "checkmark") {
                                     resolve(item, as: .used)
                                 }
                                 .tint(.green)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button("Thrown Away", systemImage: "trash") {
+                                Button("Threw Away", systemImage: "trash") {
                                     resolve(item, as: .discarded)
                                 }
                                 .tint(.red)
@@ -71,6 +78,12 @@ struct HomeView: View {
             .navigationTitle("Pantry Ping")
             .searchable(text: $searchText, prompt: "Search groceries")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu("More", systemImage: "ellipsis.circle") {
+                        Button("Saved Products", systemImage: "square.grid.2x2") { isShowingProducts = true }
+                        Button("Settings", systemImage: "gearshape") { isShowingSettings = true }
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add Grocery", systemImage: "plus") {
                         isShowingAddForm = true
@@ -82,7 +95,16 @@ struct HomeView: View {
                 GroceryDetailView(item: item)
             }
             .sheet(isPresented: $isShowingAddForm) {
-                GroceryFormView()
+                AddGroceryView()
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                SettingsView()
+            }
+            .sheet(isPresented: $isShowingProducts) {
+                ProductCatalogView()
+            }
+            .sheet(item: $itemToUse) { item in
+                UseSomeSheet(package: item)
             }
             // `item:` presents the sheet whenever the optional becomes non-nil.
             .sheet(item: $itemToRedate) { item in
@@ -118,7 +140,7 @@ struct HomeView: View {
 
     private func matchesFilters(_ item: GroceryItem) -> Bool {
         let matchesLocation = locationFilter == nil || item.storageLocation == locationFilter
-        let matchesSearch = searchText.isEmpty || item.name.localizedStandardContains(searchText)
+        let matchesSearch = searchText.isEmpty || item.displayName.localizedStandardContains(searchText)
         return matchesLocation && matchesSearch
     }
 
@@ -165,7 +187,11 @@ struct HomeView: View {
 
     private func resolve(_ item: GroceryItem, as status: ItemStatus) {
         withAnimation {
-            item.status = status
+            if status == .used {
+                item.finish()
+            } else {
+                item.throwAway()
+            }
         }
     }
 }

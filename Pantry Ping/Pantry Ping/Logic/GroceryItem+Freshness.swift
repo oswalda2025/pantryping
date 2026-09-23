@@ -20,7 +20,7 @@ extension GroceryItem {
     // With a date: "Expires tomorrow". Without one: what we know instead, e.g. "Frozen 4 days ago".
     func freshnessText(now: Date, calendar: Calendar = .current) -> String {
         if let days = daysRemaining(now: now, calendar: calendar) {
-            return ExpirationStatus.label(daysRemaining: days)
+            return ExpirationStatus.label(daysRemaining: days, isSuggested: expirationSource == .suggested)
         }
         if let stateDate = dateOfCurrentState {
             let text = "\(foodState.displayName) \(GroceryItem.relativeDayText(from: stateDate, now: now, calendar: calendar))"
@@ -85,9 +85,10 @@ extension GroceryItem {
 
     // MARK: - Actions
 
-    // Moves the food to a new state (e.g. Freeze) and records when it happened.
-    // `newExpirationDate` is whatever the user chose on the state-change sheet — possibly nil.
-    func changeFoodState(to newState: FoodState, newExpirationDate: Date?, on date: Date = .now) {
+    // Moves the food to a new state (e.g. Freeze), records when it happened in the history,
+    // and sets the use-by date the user chose on the state-change sheet (possibly nil).
+    // The original package date is never touched.
+    func changeFoodState(to newState: FoodState, newExpirationDate: Date?, source: ExpirationSource = .entered, on date: Date = .now) {
         foodState = newState
         switch newState {
         case .fresh: break
@@ -96,21 +97,37 @@ extension GroceryItem {
         case .frozen: dateFrozen = date
         case .thawed: dateThawed = date
         }
-        if let location = newState.impliedLocation {
+        var detail: [String] = []
+        if let location = newState.impliedLocation, location != storageLocation {
+            detail.append("Moved to \(location.displayName)")
             storageLocation = location
         }
         expirationDate = newExpirationDate.map { GroceryItem.calendarDay($0) }
+        expirationSource = expirationDate == nil ? .entered : source
+        if let expirationDate {
+            let prefix = expirationSource == .suggested ? "Suggested use by" : "Use by"
+            detail.append("\(prefix) \(expirationDate.formatted(date: .abbreviated, time: .omitted))")
+        }
+        if let kind = FoodEventKind(rawValue: newState.rawValue) {
+            addEvent(kind, date: date, detail: detail.joined(separator: " · "))
+        }
     }
 
     // Sets the current use-by date.
     // `isCorrection` is true when the user is fixing what they typed (the edit form): for a
     // still-fresh item the original date is corrected too. It's false when plans changed
     // (e.g. "Still have it"), so the original package date is preserved.
-    func setUseByDate(_ date: Date?, isCorrection: Bool) {
+    func setUseByDate(_ date: Date?, isCorrection: Bool, source: ExpirationSource = .entered) {
         let day = date.map { GroceryItem.calendarDay($0) }
+        let old = expirationDate
         expirationDate = day
+        expirationSource = day == nil ? .entered : source
         if isCorrection && foodState == .fresh {
             originalExpirationDate = day
+        }
+        if old != day {
+            let text = day.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "No date"
+            addEvent(.dateChanged, detail: source == .suggested ? "\(text) (suggested)" : text)
         }
     }
 }

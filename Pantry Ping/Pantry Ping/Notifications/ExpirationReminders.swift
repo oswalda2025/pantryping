@@ -17,6 +17,9 @@ nonisolated struct ReminderItem: Equatable, Sendable {
     let name: String
     /// The item's current use-by day (stored at 12:00 local time).
     let expirationDate: Date
+    /// True when the date came from general guidance rather than the user, so the
+    /// reminder says "suggested" instead of "expires".
+    var isSuggested = false
 }
 
 /// One notification we intend to schedule.
@@ -164,20 +167,35 @@ enum ExpirationReminders {
         return identifierPrefix + String(format: "%04d-%02d-%02d", year, month, day)
     }
 
+    private nonisolated static func dayPhrase(_ daysLeft: Int) -> String {
+        switch daysLeft {
+        case 0: "today"
+        case 1: "tomorrow"
+        default: "in \(daysLeft) days"
+        }
+    }
+
     /// Wording talks about the date only; we never claim food is unsafe or spoiled.
     private nonisolated static func message(for entries: [(item: ReminderItem, daysLeft: Int)]) -> (title: String, body: String) {
         if entries.count == 1, let only = entries.first {
             let name = only.item.name
             let title: String
-            switch only.daysLeft {
-            case 0: title = "\(name) expires today"
-            case 1: title = "\(name) expires tomorrow"
-            default: title = "\(name): \(only.daysLeft) days left"
+            if only.item.isSuggested {
+                title = "\(name): suggested use-by \(dayPhrase(only.daysLeft))"
+            } else {
+                switch only.daysLeft {
+                case 0: title = "\(name) expires today"
+                case 1: title = "\(name) expires tomorrow"
+                default: title = "\(name): \(only.daysLeft) days left"
+                }
             }
             return (title, "Open Pantry Ping to use it, freeze it, or mark it used.")
         }
 
         var parts = entries.prefix(maxNamesInBody).map { entry -> String in
+            if entry.item.isSuggested {
+                return "\(entry.item.name) suggested use-by \(dayPhrase(entry.daysLeft))"
+            }
             switch entry.daysLeft {
             case 0: return "\(entry.item.name) expires today"
             case 1: return "\(entry.item.name) expires tomorrow"

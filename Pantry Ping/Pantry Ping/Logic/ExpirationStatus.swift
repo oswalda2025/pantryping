@@ -46,14 +46,24 @@ enum ExpirationStatus: Int, CaseIterable, Comparable {
     }
 
     // Plain-language text so urgency never depends on color alone.
-    static func label(daysRemaining days: Int) -> String {
+    // Suggested dates (from general guidance) get their own wording and never say "Expired":
+    // passing a guidance date doesn't mean the food is bad, and meeting it doesn't mean it's safe.
+    static func label(daysRemaining days: Int, isSuggested: Bool = false) -> String {
+        if isSuggested {
+            switch days {
+            case ..<0: return "Past suggested date"
+            case 0: return "Today · suggested"
+            case 1: return "Tomorrow · suggested"
+            default: return "\(days) days left · suggested"
+            }
+        }
         switch days {
-        case ..<(-13): "Expired 2+ weeks ago"
-        case -1: "Expired yesterday"
-        case ..<0: "Expired \(-days) days ago"
-        case 0: "Expires today"
-        case 1: "Expires tomorrow"
-        default: "\(days) days left"
+        case ..<(-13): return "Expired 2+ weeks ago"
+        case -1: return "Expired yesterday"
+        case ..<0: return "Expired \(-days) days ago"
+        case 0: return "Expires today"
+        case 1: return "Expires tomorrow"
+        default: return "\(days) days left"
         }
     }
 

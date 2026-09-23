@@ -6,8 +6,8 @@
 import SwiftUI
 import SwiftData
 
-// Everything about one grocery, plus the actions that change it:
-// Used / Thrown Away, food-state changes, edit, and delete.
+// Everything about one purchased package, plus the actions that change it:
+// Use Some, Finished, Threw Away, food-state changes, Buy Again, edit, and delete.
 struct GroceryDetailView: View {
     // SwiftData models are observable: when a property of `item` changes,
     // this view redraws automatically — no @State needed.
@@ -17,21 +17,21 @@ struct GroceryDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.now) private var now
 
-    @State private var isEditing = false
+    @State private var sheet: DetailSheet?
     @State private var isConfirmingDelete = false
     // Deleting waits until this screen has closed, so it never shows a deleted item.
     @State private var deleteWhenClosed = false
-    // Which date sheet is showing. An enum keeps the two kinds from overlapping.
-    @State private var dateSheet: DateSheet?
+    @State private var shoppingListMessage: String?
 
-    private enum DateSheet: Identifiable {
+    // Every sheet this screen can show. One enum means two sheets can't collide.
+    private enum DetailSheet: Identifiable {
+        case editPackage, editProduct, useSome, buyAgain, updateDate
         case stateChange(FoodState)
-        case updateDate
 
         var id: String {
             switch self {
-            case .stateChange(let state): state.rawValue
-            case .updateDate: "updateDate"
+            case .stateChange(let state): "state-\(state.rawValue)"
+            default: "\(self)"
             }
         }
     }
@@ -51,62 +51,36 @@ struct GroceryDetailView: View {
         let status = item.expirationStatus(now: now)
 
         List {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label(item.freshnessText(now: now), systemImage: status.systemImage)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(status == .noDate ? Color.primary : status.tint)
-                    Text(summaryLine)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-
-                if item.status == .active && (status == .expired || item.shouldSuggestUseByDate) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if status == .expired {
-                            Text(FoodState.expiredGuidance)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
-                        Button(status == .expired ? "Still Have It — Update Date" : "Add a Use-By Date") {
-                            dateSheet = .updateDate
-                        }
-                    }
-                }
-            }
+            headerSection(status: status)
 
             if item.status == .active {
-                activeActions
+                actionsSection
+                foodStateSection
             } else {
                 resolvedSection
             }
 
+            productSection
             detailsSection
+            historySection
 
             Section {
                 Button("Delete Grocery", role: .destructive) {
                     isConfirmingDelete = true
                 }
             } footer: {
-                Text("Deleting removes it completely. To keep your history, mark it Used or Thrown Away instead.")
+                Text("Deleting removes it completely. To keep your history, use Finished or Threw Away instead.")
             }
         }
-        .navigationTitle(item.name)
+        .navigationTitle(item.displayName)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            Button("Edit") { isEditing = true }
+            Button("Edit") { sheet = .editPackage }
         }
-        .sheet(isPresented: $isEditing) {
-            GroceryFormView(item: item)
+        .sheet(item: $sheet) { sheet in
+            sheetContent(sheet)
         }
-        .sheet(item: $dateSheet) { sheet in
-            switch sheet {
-            case .stateChange(let state):
-                UseByDateSheet(item: item, newState: state)
-            case .updateDate:
-                UseByDateSheet(item: item, newState: nil)
-            }
-        }
-        .confirmationDialog("Delete \(item.name)?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
+        .confirmationDialog("Delete \(item.displayName)?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 deleteWhenClosed = true
                 dismiss()
@@ -119,42 +93,113 @@ struct GroceryDetailView: View {
         }
     }
 
-    // "Fridge · Dairy & Eggs · ×2"
-    private var summaryLine: String {
-        var parts = [item.storageLocation.displayName, item.category.displayName]
-        if item.quantity != 1 {
-            parts.append("×\(item.quantity.formatted())")
+    @ViewBuilder
+    private func sheetContent(_ sheet: DetailSheet) -> some View {
+        switch sheet {
+        case .editPackage:
+            EditPackageView(item: item)
+        case .editProduct:
+            if let product = item.product {
+                EditProductView(product: product)
+            }
+        case .useSome:
+            UseSomeSheet(package: item)
+        case .buyAgain:
+            NavigationStack {
+                BuyAgainView(product: ensureProduct(), showsCancel: true) { _ in self.sheet = nil }
+            }
+        case .updateDate:
+            UseByDateSheet(item: item, newState: nil)
+        case .stateChange(let state):
+            UseByDateSheet(item: item, newState: state)
         }
-        return parts.joined(separator: " · ")
     }
 
     // MARK: - Sections
 
-    private var activeActions: some View {
-        Group {
-            Section {
-                Button("Mark as Used", systemImage: "checkmark.circle") {
-                    item.status = .used
-                    dismiss()
+    private func headerSection(status: ExpirationStatus) -> some View {
+        Section {
+            HStack(alignment: .top, spacing: 14) {
+                if item.product?.photoData != nil {
+                    ProductThumbnail(data: item.product?.photoData, size: 64)
                 }
-                .tint(.green)
-                Button("Thrown Away", systemImage: "trash") {
-                    item.status = .discarded
-                    dismiss()
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(item.freshnessText(now: now), systemImage: status.systemImage)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(status == .noDate ? Color.primary : status.tint)
+                    Text(summaryLine)
+                        .foregroundStyle(.secondary)
                 }
-                .tint(.red)
+            }
+            .padding(.vertical, 4)
+
+            if item.hasMeaningfulAmount {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(item.remainingText) left")
+                        .font(.headline)
+                    ProgressView(value: Double(item.remainingAmountMilli), total: Double(max(item.startingAmountMilli, 1)))
+                        .accessibilityHidden(true)
+                    Text("of \(item.startingText)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
             }
 
-            Section {
-                // One button per state this food can move to next, e.g. Freeze or Thaw.
-                ForEach(item.foodState.nextStates) { state in
-                    Button(state.actionName, systemImage: state.systemImage) {
-                        dateSheet = .stateChange(state)
+            if item.expirationSource == .suggested, item.expirationDate != nil {
+                HStack(alignment: .top) {
+                    SuggestedTag()
+                    Text(StorageGuidance.caveat)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if item.status == .active && (status == .expired || item.shouldSuggestUseByDate) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if status == .expired {
+                        Text(FoodState.expiredGuidance)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button(status == .expired ? "Still Have It — Update Date" : "Add a Use-By Date") {
+                        sheet = .updateDate
                     }
                 }
-            } header: {
-                Text("Food State: \(item.foodState.displayName)")
             }
+        }
+    }
+
+    private var actionsSection: some View {
+        Section {
+            Button("Use Some", systemImage: "minus.circle") {
+                sheet = .useSome
+            }
+            Button("Finished", systemImage: "checkmark.circle") {
+                item.finish()
+                dismiss()
+            }
+            .tint(.green)
+            Button("Threw Away", systemImage: "trash") {
+                item.throwAway()
+                dismiss()
+            }
+            .tint(.red)
+        } footer: {
+            Text("Finished and thrown-away items leave your kitchen and stop reminders, but stay in History.")
+        }
+    }
+
+    private var foodStateSection: some View {
+        Section {
+            // One button per state this food can move to next, e.g. Freeze or Thaw.
+            ForEach(item.foodState.nextStates) { state in
+                Button(state.actionName, systemImage: state.systemImage) {
+                    sheet = .stateChange(state)
+                }
+            }
+        } header: {
+            Text("Food State: \(item.foodState.displayName)")
         }
     }
 
@@ -164,14 +209,57 @@ struct GroceryDetailView: View {
                 LabeledContent(item.status.displayName, value: resolved.formatted(date: .abbreviated, time: .omitted))
             }
             Button("Move Back to Kitchen", systemImage: "arrow.uturn.backward") {
-                item.status = .active
+                item.restoreToKitchen()
             }
+        }
+    }
+
+    private var productSection: some View {
+        Section {
+            if let product = item.product {
+                if let serving = product.servingDescription {
+                    LabeledContent("Serving", value: serving)
+                }
+                if !product.nutrition.isEmpty {
+                    LabeledContent("Calories", value: NutritionFormat.calories(product.calories))
+                    LabeledContent("Carbohydrates", value: NutritionFormat.grams(product.carbs))
+                    LabeledContent("Protein", value: NutritionFormat.grams(product.protein))
+                    LabeledContent("Fat", value: NutritionFormat.grams(product.fat))
+                }
+                Button("Edit Product", systemImage: "pencil") { sheet = .editProduct }
+            }
+            Button("Buy Again", systemImage: "arrow.clockwise") { sheet = .buyAgain }
+            Button("Add to Shopping List", systemImage: "cart.badge.plus", action: addToShoppingList)
+            if let shoppingListMessage {
+                Text(shoppingListMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text(item.product?.nutrition.isEmpty == false ? "Product · per serving" : "Product")
         }
     }
 
     private var detailsSection: some View {
         Section("Details") {
-            dateRow("Use by", item.expirationDate, fallback: "No date")
+            if item.hasMeaningfulAmount {
+                LabeledContent("Package size", value: item.startingText)
+            }
+            if let price = item.price {
+                LabeledContent("Price", value: price.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")))
+            }
+            if let date = item.expirationDate {
+                LabeledContent {
+                    HStack {
+                        if item.expirationSource == .suggested { SuggestedTag() }
+                        Text(date.formatted(date: .abbreviated, time: .omitted))
+                    }
+                } label: {
+                    Text("Use by")
+                }
+            } else {
+                LabeledContent("Use by", value: "No date")
+            }
             if item.originalExpirationDate != item.expirationDate {
                 dateRow("Original date", item.originalExpirationDate, fallback: "None")
             }
@@ -180,14 +268,67 @@ struct GroceryDetailView: View {
             dateRow("Cooked", item.dateCooked)
             dateRow("Frozen", item.dateFrozen)
             dateRow("Thawed", item.dateThawed)
-            dateRow("Added", item.dateAdded)
             if !item.notes.isEmpty {
                 LabeledContent("Notes", value: item.notes)
             }
         }
     }
 
-    // Shows a labeled date, hiding the row entirely when there's no date and no fallback.
+    // Events (bought, frozen, moved...) and usage merged into one timeline, newest first.
+    private var historySection: some View {
+        Section("History") {
+            ForEach(timeline) { entry in
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: entry.systemImage)
+                        .foregroundStyle(.tint)
+                        .frame(width: 22)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.title)
+                        if !entry.detail.isEmpty {
+                            Text(entry.detail)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    private struct TimelineEntry: Identifiable {
+        let id = UUID()
+        let date: Date
+        let systemImage: String
+        let title: String
+        let detail: String
+    }
+
+    private var timeline: [TimelineEntry] {
+        let events = (item.events ?? []).map { event in
+            let kind = FoodEventKind(rawValue: event.kindRaw) ?? .note
+            return TimelineEntry(date: event.date, systemImage: kind.systemImage, title: kind.title, detail: event.detail)
+        }
+        let uses = (item.usageEntries ?? []).map { entry in
+            TimelineEntry(date: entry.date, systemImage: entry.reason.systemImage,
+                          title: "Used \(entry.amountText)", detail: entry.reason.displayName)
+        }
+        return (events + uses).sorted { $0.date > $1.date }
+    }
+
+    // "Pantry · Dry & Canned Goods"
+    private var summaryLine: String {
+        var parts = [item.storageLocation.displayName, item.category.displayName]
+        if item.foodState != .fresh {
+            parts.insert(item.foodState.displayName, at: 1)
+        }
+        return parts.joined(separator: " · ")
+    }
+
     @ViewBuilder
     private func dateRow(_ title: String, _ date: Date?, fallback: String? = nil) -> some View {
         if let date {
@@ -195,6 +336,21 @@ struct GroceryDetailView: View {
         } else if let fallback {
             LabeledContent(title, value: fallback)
         }
+    }
+
+    // MARK: - Actions
+
+    // Older items may not have a saved product yet; create one so Buy Again works.
+    private func ensureProduct() -> Product {
+        if let product = item.product { return product }
+        let product = Product(name: item.name, category: item.category)
+        modelContext.insert(product)
+        item.product = product
+        return product
+    }
+
+    private func addToShoppingList() {
+        shoppingListMessage = ShoppingList.add(ensureProduct(), in: modelContext)
     }
 }
 

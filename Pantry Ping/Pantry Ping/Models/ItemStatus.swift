@@ -18,7 +18,7 @@ enum ItemStatus: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .active: "In Stock"
-        case .used: "Used"
+        case .used: "Finished"
         case .discarded: "Thrown Away"
         }
     }

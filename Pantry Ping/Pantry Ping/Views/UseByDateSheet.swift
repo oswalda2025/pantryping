@@ -18,6 +18,14 @@ struct UseByDateSheet: View {
 
     @State private var hasDate: Bool
     @State private var date: Date
+    // Whether the chosen date came from general guidance. It stays "suggested" only
+    // while the date is exactly the suggested one; editing it makes it the user's own.
+    @State private var source = ExpirationSource.entered
+    @State private var appliedSuggestionDate: Date?
+
+    private var suggestion: StorageSuggestion? {
+        newState.flatMap { StorageGuidance.suggestion(for: $0, category: item.category) }
+    }
 
     init(item: GroceryItem, newState: FoodState?) {
         self.item = item
@@ -63,10 +71,33 @@ struct UseByDateSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
+                if let suggestion {
+                    Section {
+                        Text(suggestion.message)
+                            .font(.callout)
+                        Button("Use Suggestion: \(suggestion.date(from: now).formatted(date: .abbreviated, time: .omitted))") {
+                            let suggested = suggestion.date(from: now)
+                            withAnimation {
+                                date = suggested
+                                hasDate = true
+                            }
+                            appliedSuggestionDate = suggested
+                            source = .suggested
+                        }
+                    } header: {
+                        Text("General Guidance · \(suggestion.source)")
+                    } footer: {
+                        Text(StorageGuidance.caveat)
+                    }
+                }
+
                 Section {
                     Toggle("Set a use-by date", isOn: $hasDate.animation())
                     if hasDate {
-                        DatePicker("Use by", selection: $date, displayedComponents: .date)
+                        HStack {
+                            DatePicker("Use by", selection: $date, displayedComponents: .date)
+                            if source == .suggested { SuggestedTag() }
+                        }
                     }
                 } footer: {
                     if let newState, newState != .opened, !hasDate {
@@ -94,15 +125,21 @@ struct UseByDateSheet: View {
         }
         // Detents let the sheet stop at half height.
         .presentationDetents([.medium, .large])
+        // Any change away from the suggested day makes it the user's own date.
+        .onChange(of: date) { _, newDate in
+            if let applied = appliedSuggestionDate, !Calendar.current.isDate(newDate, inSameDayAs: applied) {
+                source = .entered
+            }
+        }
     }
 
     private func confirm() {
         let chosenDate = hasDate ? date : nil
         withAnimation {
             if let newState {
-                item.changeFoodState(to: newState, newExpirationDate: chosenDate, on: now)
+                item.changeFoodState(to: newState, newExpirationDate: chosenDate, source: source, on: now)
             } else {
-                item.setUseByDate(chosenDate, isCorrection: false)
+                item.setUseByDate(chosenDate, isCorrection: false, source: source)
             }
         }
         dismiss()
