@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Xcode per-user state (window layout, breakpoints) — not shared
+xcuserdata/
+*.xcuserstate
+
+# Build output
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
