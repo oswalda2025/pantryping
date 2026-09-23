@@ -15,11 +15,15 @@ struct Pantry_PingApp: App {
     let modelContainer: ModelContainer
 
     init() {
+        // Automated UI tests launch with "-uiTesting" to start from an empty, throwaway database.
+        let isUITesting = ProcessInfo.processInfo.arguments.contains("-uiTesting")
+
         // `do`/`catch` handles code that can fail (`try`).
         do {
             modelContainer = try ModelContainer(
                 for: Schema(versionedSchema: SchemaV1.self),
-                migrationPlan: PantryPingMigrationPlan.self
+                migrationPlan: PantryPingMigrationPlan.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: isUITesting)
             )
         } catch {
             // Without a database the app can't work, so stop with a clear message.
