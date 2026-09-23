@@ -255,7 +255,7 @@ struct GroceryDetailView: View {
                 LabeledContent("Package size", value: item.startingText)
             }
             if let price = item.price {
-                LabeledContent("Price", value: price.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")))
+                LabeledContent("Price", value: Money.text(price))
             }
             if let date = item.expirationDate {
                 LabeledContent {

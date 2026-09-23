@@ -72,7 +72,7 @@ struct PackageFields: View {
             HStack {
                 Text("Price")
                 Spacer()
-                Text(Locale.current.currencySymbol ?? "$")
+                Text(Money.symbol)
                     .foregroundStyle(.secondary)
                 TextField("Optional", text: $draft.priceText)
                     .keyboardType(.decimalPad)

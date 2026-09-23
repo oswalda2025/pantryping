@@ -106,7 +106,7 @@ struct HistoryView: View {
         let prices = packages.compactMap(\.price)
         let missing = packages.count - prices.count
         guard !prices.isEmpty else { return "No prices entered" }
-        let total = prices.reduce(Decimal(0), +).formatted(.currency(code: Locale.current.currency?.identifier ?? "USD"))
+        let total = Money.text(prices.reduce(Decimal(0), +))
         return missing == 0 ? "Total \(total)" : "Total \(total) · \(missing) without a price"
     }
 
@@ -194,7 +194,7 @@ private struct PurchaseRow: View {
             }
             Spacer()
             if let price = package.price {
-                Text(price.formatted(.currency(code: Locale.current.currency?.identifier ?? "USD")))
+                Text(Money.text(price))
                     .font(.subheadline.monospacedDigit())
             }
         }

@@ -5,6 +5,19 @@
 
 import SwiftUI
 
+// Prices are always in US dollars, whatever region the phone is set to.
+// Kept in one place so every screen shows money the same way.
+enum Money {
+    static let currencyCode = "USD"
+    static let symbol = "$"
+
+    // "$4.99"
+    static func text(_ amount: Decimal) -> String {
+        // US formatting too, so it reads "$4.99" rather than "US$4.99" in other regions.
+        amount.formatted(.currency(code: currencyCode).locale(Locale(identifier: "en_US")))
+    }
+}
+
 // Turns what someone typed into a number, accepting both "4.5" and "4,5".
 // Empty text means "not entered" (nil), which is different from 0.
 enum NumberInput {

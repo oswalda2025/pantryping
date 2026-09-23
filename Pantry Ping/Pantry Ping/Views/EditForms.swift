@@ -62,7 +62,7 @@ struct EditPackageView: View {
                     HStack {
                         Text("Price")
                         Spacer()
-                        Text(Locale.current.currencySymbol ?? "$").foregroundStyle(.secondary)
+                        Text(Money.symbol).foregroundStyle(.secondary)
                         TextField("Optional", text: $priceText)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)

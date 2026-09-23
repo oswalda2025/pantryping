@@ -79,7 +79,7 @@ There are also two supporting types:
 - **The package keeps its own copy of the product name**, so the food log and history still read correctly if a product is later deleted.
 - **Usage entries save the nutrition for the amount at the time it was logged**, so editing a product later doesn't rewrite past logs.
 - **"Finished" reuses the V1 status value `used`** to stay compatible with existing data.
-- **Money is stored as `Decimal`**, and the currency follows the device's region.
+- **Money is stored as `Decimal` and always shown in US dollars**, whatever region the phone is set to.
 - **Meal nutrition is only shown for values every ingredient has.** Untracked ingredients mark the total as incomplete.
 - **Deleting a meal doesn't put its ingredients back.** Undoing an individual food-log entry does restore the amount.
 
