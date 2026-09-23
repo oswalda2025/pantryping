@@ -19,6 +19,8 @@ struct ContentView: View {
     @AppStorage("remindersEnabled") private var remindersEnabled = true
     // Set by DatabaseLoader if saved data couldn't be opened; shown once, then cleared.
     @AppStorage(DatabaseLoader.recoveryNoteKey) private var recoveryNote = ""
+    // False until the welcome flow (name + who it's for) has been completed once.
+    @AppStorage(ProfileKeys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
 
     // Active groceries and meals with a date — the only ones reminders care about.
     // Finished or thrown-away items drop out of these queries, which stops their reminders.
@@ -53,6 +55,13 @@ struct ContentView: View {
             }
         }
         .environment(\.now, now)
+        // A full-screen cover can't be swiped away, so onboarding is finished before use.
+        .fullScreenCover(isPresented: Binding(
+            get: { !hasCompletedOnboarding },
+            set: { _ in }
+        )) {
+            OnboardingView()
+        }
         .alert("Saved Data Couldn't Be Opened", isPresented: Binding(
             get: { !recoveryNote.isEmpty },
             set: { if !$0 { recoveryNote = "" } }
@@ -77,7 +86,8 @@ struct ContentView: View {
         }
         // `.task(id:)` runs this async work on appear and again whenever the id changes
         // (groceries edited, reminders toggled, or a new day) — cancelling any older run.
-        .task(id: ReminderSchedule(items: reminderItems, enabled: remindersEnabled, now: now)) {
+        .task(id: ReminderSchedule(items: reminderItems, enabled: remindersEnabled, now: now,
+                                   onboarded: hasCompletedOnboarding)) {
             await updateReminders()
         }
     }
@@ -85,7 +95,8 @@ struct ContentView: View {
     private func updateReminders() async {
         // Ask for permission the first time there's actually something to remind about,
         // so the system prompt appears in context rather than at first launch.
-        if remindersEnabled && !reminderItems.isEmpty {
+        // Never while the welcome screens are showing.
+        if remindersEnabled && hasCompletedOnboarding && !reminderItems.isEmpty {
             _ = await ExpirationReminders.requestAuthorizationIfNeeded()
         }
         await ExpirationReminders.reschedule(for: reminderItems, enabled: remindersEnabled)
@@ -98,6 +109,7 @@ private struct ReminderSchedule: Equatable {
     let items: [ReminderItem]
     let enabled: Bool
     let now: Date
+    let onboarded: Bool
 }
 
 #Preview {

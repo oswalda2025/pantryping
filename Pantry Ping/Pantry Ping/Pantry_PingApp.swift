@@ -15,7 +15,14 @@ struct Pantry_PingApp: App {
     let modelContainer: ModelContainer
 
     init() {
-        modelContainer = DatabaseLoader.makeContainer(arguments: ProcessInfo.processInfo.arguments)
+        let arguments = ProcessInfo.processInfo.arguments
+        // UI tests pass "-resetProfile" to see the first-launch welcome screens again.
+        if arguments.contains("-resetProfile") {
+            for key in [ProfileKeys.hasCompletedOnboarding, ProfileKeys.name, ProfileKeys.householdType] {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        modelContainer = DatabaseLoader.makeContainer(arguments: arguments)
     }
 
     var body: some Scene {

@@ -200,6 +200,7 @@ struct HomeView: View {
 private struct PantrySummary: View {
     let groceries: [GroceryItem]
     let now: Date
+    @AppStorage(ProfileKeys.name) private var name = ""
 
     var body: some View {
         let statuses = groceries.map { $0.expirationStatus(now: now) }
@@ -218,12 +219,15 @@ private struct PantrySummary: View {
         .accessibilityElement(children: .combine)
     }
 
+    // "Good evening, Dhiren" — or just "Good evening" when no name was given.
     private var greeting: String {
-        switch Calendar.current.component(.hour, from: now) {
+        let timeOfDay = switch Calendar.current.component(.hour, from: now) {
         case 5..<12: "Good morning"
         case 12..<17: "Good afternoon"
         default: "Good evening"
         }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? timeOfDay : "\(timeOfDay), \(trimmed)"
     }
 
     private func summary(expired: Int, urgent: Int) -> String {

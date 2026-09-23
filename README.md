@@ -34,6 +34,7 @@ There are also two supporting types:
 
 | Area | Features |
 | --- | --- |
+| **Welcome (first launch)** | Asks your name (optional) and who the app is for: **Student**, **Living alone**, or **Family or household**, with tips tailored to that choice. These are presets on the same app, not separate modes. Both can be changed in Settings. There's no account: everything stays on the phone (see "Not built yet"). |
 | **Kitchen** | Groceries grouped by urgency: **Expired**, **Needs Attention**, **Use Soon**, and **Your Food**. Each row shows how much is left ("279 g · 4.5 servings"). Also has an All / Fridge / Freezer / Pantry filter and search. |
 | **Kitchen swipe actions** | Swipe right for **Use Some** or **Finished**. Swipe left for **Threw Away**, and for **Still Have It** on expired items. |
 | **Adding groceries** | **+** opens your saved products for **Buy Again**, or **New Product** for something new. A new product asks for its name, an optional photo, and optional serving and nutrition details, together with the first package's size, price, dates, and storage. **Buy Again** only asks for the package details and reuses the product's name, photo, serving size, and nutrition. |
@@ -84,6 +85,8 @@ There are also two supporting types:
 - **Deleting a meal doesn't put its ingredients back.** Undoing an individual food-log entry does restore the amount.
 
 ## Not built yet
+
+- **Accounts (Sign in with Apple, with iCloud backup and sync).** These need the paid Apple Developer Program. The planned approach is to keep using SwiftData, turn on CloudKit sync, and add an in-app "Delete account" option, which Apple requires.
 
 These are deferred, following the roadmap:
 

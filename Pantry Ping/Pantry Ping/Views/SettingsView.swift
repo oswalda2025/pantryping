@@ -9,6 +9,8 @@ import UserNotifications
 
 struct SettingsView: View {
     @AppStorage("remindersEnabled") private var remindersEnabled = true
+    @AppStorage(ProfileKeys.name) private var name = ""
+    @AppStorage(ProfileKeys.householdType) private var householdRaw = HouseholdType.solo.rawValue
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -20,6 +22,20 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    TextField("Your name", text: $name)
+                        .textInputAutocapitalization(.words)
+                    Picker("Set up for", selection: $householdRaw) {
+                        ForEach(HouseholdType.allCases) { type in
+                            Label(type.title, systemImage: type.systemImage).tag(type.rawValue)
+                        }
+                    }
+                } header: {
+                    Text("Profile")
+                } footer: {
+                    Text("Your profile and groceries are stored only on this iPhone. Signing in with Apple and iCloud backup are planned for a later version.")
+                }
+
                 Section {
                     Toggle("Expiration Reminders", isOn: $remindersEnabled)
                     if remindersEnabled && notificationsDenied,

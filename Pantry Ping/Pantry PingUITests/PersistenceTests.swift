@@ -11,7 +11,7 @@ final class PersistenceTests: PantryPingUITestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["-uiTestingDiskStore", "-resetStore", "-remindersEnabled", "NO"]
+        app.launchArguments = ["-uiTestingDiskStore", "-resetStore", "-remindersEnabled", "NO", "-hasCompletedOnboarding", "YES"]
         app.launch()
     }
 
@@ -34,7 +34,7 @@ final class PersistenceTests: PantryPingUITestCase {
         app.terminate()
 
         // Relaunch WITHOUT resetting the database.
-        app.launchArguments = ["-uiTestingDiskStore", "-remindersEnabled", "NO"]
+        app.launchArguments = ["-uiTestingDiskStore", "-remindersEnabled", "NO", "-hasCompletedOnboarding", "YES"]
         app.launch()
         XCTAssertTrue(row("Milk").waitForExistence(timeout: 15), "Sample data should still be there")
         search("Granola")

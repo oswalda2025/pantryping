@@ -12,8 +12,9 @@ class PantryPingUITestCase: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        // Empty in-memory database, and reminders off so no permission alert interrupts.
-        app.launchArguments = ["-uiTesting", "-remindersEnabled", "NO"]
+        // Empty in-memory database, reminders off so no permission alert interrupts,
+        // and onboarding treated as done (OnboardingTests covers it separately).
+        app.launchArguments = ["-uiTesting", "-remindersEnabled", "NO", "-hasCompletedOnboarding", "YES"]
         app.launch()
     }
 
