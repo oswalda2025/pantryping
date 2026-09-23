@@ -15,6 +15,9 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.now) private var now
 
+    // The item waiting for delete confirmation (deleting is permanent).
+    @State private var itemToDelete: GroceryItem?
+
     // Most recently resolved first.
     private var sortedItems: [GroceryItem] {
         resolvedItems.sorted { ($0.dateResolved ?? .distantPast) > ($1.dateResolved ?? .distantPast) }
@@ -45,15 +48,31 @@ struct HistoryView: View {
                             }
                             .tint(.blue)
                         }
-                        .swipeActions(edge: .trailing) {
-                            Button("Delete", systemImage: "trash", role: .destructive) {
-                                modelContext.delete(item)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button("Delete", systemImage: "trash") {
+                                itemToDelete = item
                             }
+                            .tint(.red)
                         }
                     }
                 }
             }
             .navigationTitle("History")
+            .confirmationDialog(
+                "Delete \(itemToDelete?.name ?? "item") permanently?",
+                isPresented: Binding(
+                    get: { itemToDelete != nil },
+                    set: { if !$0 { itemToDelete = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: itemToDelete
+            ) { item in
+                Button("Delete", role: .destructive) {
+                    withAnimation { modelContext.delete(item) }
+                }
+            } message: { _ in
+                Text("It will no longer count in your history.")
+            }
             .navigationDestination(for: GroceryItem.self) { item in
                 GroceryDetailView(item: item)
             }

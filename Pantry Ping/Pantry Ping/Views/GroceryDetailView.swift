@@ -19,6 +19,8 @@ struct GroceryDetailView: View {
 
     @State private var isEditing = false
     @State private var isConfirmingDelete = false
+    // Deleting waits until this screen has closed, so it never shows a deleted item.
+    @State private var deleteWhenClosed = false
     // Which date sheet is showing. An enum keeps the two kinds from overlapping.
     @State private var dateSheet: DateSheet?
 
@@ -35,6 +37,17 @@ struct GroceryDetailView: View {
     }
 
     var body: some View {
+        // The item may have been deleted elsewhere (e.g. from another tab) while this
+        // screen was still open. Reading a deleted SwiftData model can crash, so check first.
+        if item.isDeleted || item.modelContext == nil {
+            ContentUnavailableView("Grocery deleted", systemImage: "trash")
+        } else {
+            details
+        }
+    }
+
+    @ViewBuilder
+    private var details: some View {
         let status = item.expirationStatus(now: now)
 
         List {
@@ -95,8 +108,13 @@ struct GroceryDetailView: View {
         }
         .confirmationDialog("Delete \(item.name)?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
-                modelContext.delete(item)
+                deleteWhenClosed = true
                 dismiss()
+            }
+        }
+        .onDisappear {
+            if deleteWhenClosed {
+                modelContext.delete(item)
             }
         }
     }

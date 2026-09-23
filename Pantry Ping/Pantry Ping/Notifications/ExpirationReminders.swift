@@ -127,11 +127,14 @@ enum ExpirationReminders {
             .filter { $0.hasPrefix(identifierPrefix) }
         center.removePendingNotificationRequests(withIdentifiers: ours)
 
-        guard enabled else { return }
+        // `.task(id:)` cancels an older run when a newer one starts; stop here so the
+        // older run can't re-add reminders the newer run just cleared.
+        guard enabled, !Task.isCancelled else { return }
         let status = await center.notificationSettings().authorizationStatus
         guard status == .authorized || status == .provisional || status == .ephemeral else { return }
 
         for reminder in plan(for: items, now: Date(), calendar: .current) {
+            if Task.isCancelled { return }
             let content = UNMutableNotificationContent()
             content.title = reminder.title
             content.body = reminder.body

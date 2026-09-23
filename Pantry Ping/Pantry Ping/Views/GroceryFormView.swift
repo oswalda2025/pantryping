@@ -160,7 +160,11 @@ struct GroceryFormView: View {
             item.category = category
             item.purchaseDate = GroceryItem.calendarDay(purchaseDate)
             item.notes = notes
-            item.setUseByDate(date, isCorrection: true)
+            // Only touch dates the user actually changed; re-saving an unchanged date
+            // would overwrite the original package date for fresh items.
+            if useByDateChanged(from: item.expirationDate, to: date) {
+                item.setUseByDate(date, isCorrection: true)
+            }
         } else {
             let newItem = GroceryItem(
                 name: trimmedName,
@@ -176,6 +180,14 @@ struct GroceryFormView: View {
             lastLocationRaw = location.rawValue
         }
         dismiss()
+    }
+
+    private func useByDateChanged(from old: Date?, to new: Date?) -> Bool {
+        switch (old, new) {
+        case (nil, nil): false
+        case let (old?, new?): !Calendar.current.isDate(old, inSameDayAs: new)
+        default: true
+        }
     }
 }
 

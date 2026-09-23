@@ -5,17 +5,31 @@
 
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 struct SettingsView: View {
     @AppStorage("remindersEnabled") private var remindersEnabled = true
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+
+    // True when the user has turned notifications off for Pantry Ping in iOS Settings.
+    @State private var notificationsDenied = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     Toggle("Expiration Reminders", isOn: $remindersEnabled)
+                    if remindersEnabled && notificationsDenied,
+                       let settingsURL = URL(string: UIApplication.openNotificationSettingsURLString) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Notifications are off for Pantry Ping in iOS Settings.", systemImage: "bell.slash")
+                                .foregroundStyle(.orange)
+                            Link("Open Settings", destination: settingsURL)
+                        }
+                        .font(.callout)
+                    }
                 } footer: {
                     Text("A daily reminder at 9 AM when groceries have 3, 2, 1, or 0 days left.")
                 }
@@ -37,6 +51,11 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            // Re-check whenever the user returns, e.g. after changing it in iOS Settings.
+            .task(id: scenePhase) {
+                let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+                notificationsDenied = status == .denied
+            }
         }
     }
 

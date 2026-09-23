@@ -28,9 +28,13 @@ struct UseByDateSheet: View {
         } else {
             _hasDate = State(initialValue: true)
         }
-        // Start the picker on the current date if it's still ahead, otherwise today.
-        let start = max(item.expirationDate ?? .now, .now)
-        _date = State(initialValue: start)
+        if let newState, newState.keepsExistingDateByDefault, let existing = item.expirationDate {
+            // Keeping the package date means keeping it exactly — even if it has passed.
+            _date = State(initialValue: existing)
+        } else {
+            // A new date starts on the current one if it's still ahead, otherwise today.
+            _date = State(initialValue: max(item.expirationDate ?? .now, .now))
+        }
     }
 
     private var title: String {

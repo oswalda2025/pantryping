@@ -41,8 +41,16 @@ final class PantryPingFlowTests: XCTestCase {
     // Search narrows the list so the row is on screen (lists only create visible rows).
     private func search(_ text: String) {
         let field = app.searchFields.firstMatch
-        field.tap()
+        tap(field, until: app.keyboards.firstMatch)
         field.typeText(text)
+    }
+
+    // Saves a screenshot into the test results, handy for reviewing the design.
+    private func keepScreenshot(named name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     private func loadSamples() {
@@ -76,6 +84,7 @@ final class PantryPingFlowTests: XCTestCase {
 
     func testSampleGroceriesAreGroupedByUrgency() {
         loadSamples()
+        keepScreenshot(named: "Kitchen with sample groceries")
         XCTAssertTrue(app.staticTexts["Expired"].exists)
         XCTAssertTrue(app.staticTexts["Needs Attention"].exists)
         XCTAssertTrue(row("Strawberries").label.contains("Expired yesterday"))
@@ -106,10 +115,26 @@ final class PantryPingFlowTests: XCTestCase {
         tap(row("Greek Yogurt"), until: app.buttons["Freeze"])
         let sheetBar = app.navigationBars["Freeze Greek Yogurt"]
         tap(app.buttons["Freeze"], until: sheetBar)
+        keepScreenshot(named: "Freeze sheet")
         sheetBar.buttons["Freeze"].tap()
 
         XCTAssertTrue(app.staticTexts["Frozen today"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Thaw"].exists)
+    }
+
+    func testDeleteFromDetailRemovesItem() {
+        loadSamples()
+        search("Rice")
+        tap(row("Rice"), until: app.buttons["Delete Grocery"])
+        app.buttons["Delete Grocery"].tap()
+
+        let confirm = app.buttons["Delete"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+
+        // Back on the list, the search for "Rice" now finds nothing.
+        XCTAssertTrue(app.staticTexts["No Results for \u{201C}Rice\u{201D}"].waitForExistence(timeout: 10))
+        XCTAssertFalse(row("Rice").exists)
     }
 
     func testLocationFilterAndSearch() {

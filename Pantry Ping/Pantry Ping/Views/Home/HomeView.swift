@@ -31,10 +31,12 @@ struct HomeView: View {
                 if !groceries.isEmpty {
                     PantrySummary(groceries: groceries, now: now)
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
 
                     locationPicker
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets())
                 }
 
