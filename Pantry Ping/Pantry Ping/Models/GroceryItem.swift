@@ -39,10 +39,22 @@ enum SchemaV1: VersionedSchema {
         var purchaseDate: Date = Date()
 
         // `Date?` is an optional: it may hold a date or be `nil`.
-        // nil means "no known expiration date" (common for pantry staples).
-        // This is always the date the user entered — later food-state adjustments
-        // will be stored in a separate field and never overwrite it.
+        // nil means "no known use-by date" (common for pantry staples).
+        // This is the CURRENT use-by date the countdown uses. It may change when the food
+        // is cooked, frozen, or thawed — but only to a date the user enters.
         var expirationDate: Date? = nil
+
+        // The date entered when the item was added (usually the package date).
+        // Food-state changes never touch it, so the original information is never lost.
+        var originalExpirationDate: Date? = nil
+
+        var foodStateRaw: String = "fresh"
+        var dateOpened: Date? = nil
+        var dateCooked: Date? = nil
+        var dateFrozen: Date? = nil
+        var dateThawed: Date? = nil
+
+        var notes: String = ""
 
         var dateAdded: Date = Date()
 
@@ -55,7 +67,8 @@ enum SchemaV1: VersionedSchema {
             storageLocation: StorageLocation = .fridge,
             quantity: Double = 1,
             purchaseDate: Date = .now,
-            expirationDate: Date? = nil
+            expirationDate: Date? = nil,
+            notes: String = ""
         ) {
             self.name = name
             self.categoryRaw = category.rawValue
@@ -63,7 +76,10 @@ enum SchemaV1: VersionedSchema {
             self.quantity = quantity
             self.purchaseDate = GroceryItem.calendarDay(purchaseDate)
             // `.map` runs only when the optional holds a value; nil stays nil.
-            self.expirationDate = expirationDate.map { GroceryItem.calendarDay($0) }
+            let day = expirationDate.map { GroceryItem.calendarDay($0) }
+            self.expirationDate = day
+            self.originalExpirationDate = day
+            self.notes = notes
             self.dateAdded = .now
         }
     }
@@ -97,6 +113,11 @@ extension GroceryItem {
     var storageLocation: StorageLocation {
         get { StorageLocation(rawValue: storageLocationRaw) ?? .fridge }
         set { storageLocationRaw = newValue.rawValue }
+    }
+
+    var foodState: FoodState {
+        get { FoodState(rawValue: foodStateRaw) ?? .fresh }
+        set { foodStateRaw = newValue.rawValue }
     }
 
     var status: ItemStatus {
