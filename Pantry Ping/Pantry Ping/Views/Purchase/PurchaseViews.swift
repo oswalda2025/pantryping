@@ -20,8 +20,11 @@ enum PackageUnits {
 // First purchase of something new: the product's details (name, photo, nutrition)
 // plus this package. Saving creates both.
 struct NewGroceryView: View {
-    var prefillName = ""
     var showsCancel = false
+    // What a barcode scan found (nil when typed by hand or not found).
+    var lookup: FoodLookupResult?
+    // A scanned barcode, saved with the product so it's recognized next time.
+    var barcode: String?
     // Called with the new package after saving, so the presenter can close or react.
     var onSaved: (GroceryItem) -> Void
 
@@ -29,10 +32,36 @@ struct NewGroceryView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Product.name) private var products: [Product]
 
-    @State private var product = ProductDraft()
-    @State private var package = PackageDraft(product: nil)
+    @State private var product: ProductDraft
+    @State private var package: PackageDraft
     @State private var errorMessage: String?
     @State private var lastAutoFill: String?
+
+    @MainActor
+    init(prefillName: String = "", showsCancel: Bool = false, lookup: FoodLookupResult? = nil,
+         barcode: String? = nil, onSaved: @escaping (GroceryItem) -> Void) {
+        self.showsCancel = showsCancel
+        self.lookup = lookup
+        self.barcode = barcode
+        self.onSaved = onSaved
+
+        var productDraft = lookup.map(ProductDraft.init(lookup:)) ?? ProductDraft(name: prefillName)
+        if productDraft.barcode == nil { productDraft.barcode = barcode }
+        _product = State(initialValue: productDraft)
+
+        // Use the package size printed on the box when it's in the same kind of unit
+        // as the serving (e.g. 510 g of 39 g servings).
+        var packageDraft = PackageDraft(product: nil)
+        if let lookup, let amount = lookup.packageAmount, let unit = lookup.packageUnit,
+           unit.dimension == lookup.servingUnit.dimension {
+            packageDraft.amountText = NumberInput.text(amount)
+            packageDraft.unit = unit
+        } else if lookup != nil {
+            packageDraft.amountText = ""
+            packageDraft.unit = .serving
+        }
+        _package = State(initialValue: packageDraft)
+    }
 
     private var units: [MeasureUnit] {
         PackageUnits.options(servingSize: product.servingSize, servingUnit: product.servingUnit)
@@ -47,6 +76,21 @@ struct NewGroceryView: View {
 
     var body: some View {
         Form {
+            if let lookup {
+                Section {
+                    Label("Found in \(lookup.source.displayName). Check the details against your package — you can change anything.",
+                          systemImage: "barcode.viewfinder")
+                        .font(.callout)
+                }
+            } else if let barcode {
+                Section {
+                    Label("Barcode \(barcode) wasn't found in USDA or Open Food Facts. Add the details once and Pantry Ping will recognize it next time.",
+                          systemImage: "barcode")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if let match = existingMatch {
                 Section {
                     NavigationLink {
@@ -78,9 +122,6 @@ struct NewGroceryView: View {
                 Button("Save", action: save)
                     .disabled(product.trimmedName.isEmpty)
             }
-        }
-        .onAppear {
-            if product.name.isEmpty { product.name = prefillName }
         }
         // When "servings per package" is typed and the package size hasn't been edited by
         // hand, fill it in so the user doesn't type it twice. `lastAutoFill` lets it keep
@@ -265,6 +306,11 @@ struct AddGroceryView: View {
         NavigationStack {
             List {
                 Section {
+                    NavigationLink {
+                        ScanBarcodeView { _ in dismiss() }
+                    } label: {
+                        Label("Scan Barcode", systemImage: "barcode.viewfinder")
+                    }
                     NavigationLink {
                         NewGroceryView(prefillName: searchText) { _ in dismiss() }
                     } label: {

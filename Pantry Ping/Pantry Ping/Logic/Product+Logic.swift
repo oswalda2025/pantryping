@@ -17,6 +17,12 @@ extension Product {
         set { servingUnitRaw = newValue?.rawValue }
     }
 
+    // Where the nutrition numbers came from (nil when none were entered).
+    var nutritionSource: NutritionDataSource? {
+        get { nutritionSourceRaw.flatMap(NutritionDataSource.init(rawValue:)) }
+        set { nutritionSourceRaw = newValue?.rawValue }
+    }
+
     // Nutrition for one serving.
     var nutrition: NutritionFacts {
         get { NutritionFacts(calories: calories, carbs: carbs, protein: protein, fat: fat) }

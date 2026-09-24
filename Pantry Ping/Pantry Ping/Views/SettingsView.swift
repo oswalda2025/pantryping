@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("remindersEnabled") private var remindersEnabled = true
     @AppStorage(ProfileKeys.name) private var name = ""
     @AppStorage(ProfileKeys.householdType) private var householdRaw = HouseholdType.solo.rawValue
+    @AppStorage(FoodLookup.usdaKeyStorageKey) private var usdaKey = ""
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -49,6 +50,22 @@ struct SettingsView: View {
                     }
                 } footer: {
                     Text("A daily reminder at 9 AM when groceries or prepared meals have 3, 2, 1, or 0 days left. Finished and thrown-away items never get reminders.")
+                }
+
+                Section {
+                    TextField("USDA API key (optional)", text: $usdaKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.callout.monospaced())
+                    if let signUp = URL(string: "https://fdc.nal.usda.gov/api-key-signup") {
+                        Link("Get a Free USDA Key", destination: signUp)
+                    }
+                } header: {
+                    Text("Barcode Lookup")
+                } footer: {
+                    Text(usdaKey.isEmpty
+                         ? "Scanning checks USDA FoodData Central, then Open Food Facts. Without your own free key, USDA allows only a few lookups per hour, so most scans will use Open Food Facts. Only the barcode number is sent."
+                         : "Scanning checks USDA FoodData Central with your key, then Open Food Facts. Only the barcode number is sent.")
                 }
 
                 Section {

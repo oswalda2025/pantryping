@@ -16,7 +16,7 @@ struct InventoryTests {
 
     init() throws {
         let container = try ModelContainer(
-            for: Schema(versionedSchema: SchemaV2.self),
+            for: Schema(versionedSchema: SchemaV3.self),
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         context = ModelContext(container)

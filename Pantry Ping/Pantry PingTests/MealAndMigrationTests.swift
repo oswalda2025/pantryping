@@ -14,7 +14,7 @@ struct PreparedMealTests {
 
     init() throws {
         let container = try ModelContainer(
-            for: Schema(versionedSchema: SchemaV2.self),
+            for: Schema(versionedSchema: SchemaV3.self),
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         context = ModelContext(container)
@@ -136,7 +136,7 @@ struct QAFixTests {
 
     init() throws {
         let container = try ModelContainer(
-            for: Schema(versionedSchema: SchemaV2.self),
+            for: Schema(versionedSchema: SchemaV3.self),
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         context = ModelContext(container)
@@ -242,7 +242,7 @@ struct MigrationTests {
         }
 
         // 2. Open it with the current schema and migration plan.
-        let v2 = try ModelContainer(for: Schema(versionedSchema: SchemaV2.self),
+        let v2 = try ModelContainer(for: Schema(versionedSchema: SchemaV3.self),
                                     migrationPlan: PantryPingMigrationPlan.self,
                                     configurations: ModelConfiguration(url: url))
         let context = ModelContext(v2)
@@ -277,7 +277,7 @@ struct DatabaseRecoveryTests {
         let url = folder.appending(path: "broken.store")
         try Data("this is not a database".utf8).write(to: url)
 
-        let container = DatabaseLoader.openOrRecover(schema: Schema(versionedSchema: SchemaV2.self),
+        let container = DatabaseLoader.openOrRecover(schema: Schema(versionedSchema: SchemaV3.self),
                                                      configuration: ModelConfiguration(url: url))
         // The fresh database works.
         let context = ModelContext(container)
@@ -287,5 +287,48 @@ struct DatabaseRecoveryTests {
         let files = try FileManager.default.contentsOfDirectory(atPath: folder.path)
         #expect(files.contains { $0.hasPrefix("broken.store-unreadable-") })
         #expect(UserDefaults.standard.string(forKey: DatabaseLoader.recoveryNoteKey)?.contains("backup") == true)
+    }
+}
+
+// Opens a real on-disk version-2 database with the current (version 3) app.
+@MainActor
+struct MigrationV2Tests {
+    @Test func v2DataUpgradesWithoutLosingAnything() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "v2.store")
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        do {
+            let v2 = try ModelContainer(for: Schema(versionedSchema: SchemaV2.self),
+                                        configurations: ModelConfiguration(url: url))
+            let context = ModelContext(v2)
+            let granola = SchemaV2.Product(name: "Granola")
+            granola.calories = 260
+            granola.servingSize = 62
+            granola.servingUnitRaw = "g"
+            let box = SchemaV2.GroceryItem(name: "Granola")
+            box.product = granola
+            box.quantityUnitRaw = "g"
+            box.startingAmountMilli = 310_000
+            box.remainingAmountMilli = 279_000
+            box.price = Decimal(string: "4.99")
+            context.insert(granola)
+            context.insert(box)
+            try context.save()
+        }
+
+        let current = try ModelContainer(for: Schema(versionedSchema: SchemaV3.self),
+                                         migrationPlan: PantryPingMigrationPlan.self,
+                                         configurations: ModelConfiguration(url: url))
+        let context = ModelContext(current)
+        let product = try #require(try context.fetch(FetchDescriptor<Product>()).first)
+        let box = try #require(try context.fetch(FetchDescriptor<GroceryItem>()).first)
+        #expect(product.calories == 260)
+        #expect(product.barcode == nil)
+        #expect(product.nutritionSource == nil)
+        #expect(box.remainingText == "279 g · 4.5 servings")
+        #expect(box.price == Decimal(string: "4.99"))
+        #expect(box.product === product)
     }
 }

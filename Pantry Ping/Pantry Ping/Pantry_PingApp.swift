@@ -42,7 +42,7 @@ enum DatabaseLoader {
     static let recoveryNoteKey = "databaseRecoveryNote"
 
     static func makeContainer(arguments: [String]) -> ModelContainer {
-        let schema = Schema(versionedSchema: SchemaV2.self)
+        let schema = Schema(versionedSchema: SchemaV3.self)
         let configuration: ModelConfiguration
         if arguments.contains("-uiTesting") {
             // Automated UI tests start from an empty, throwaway in-memory database.

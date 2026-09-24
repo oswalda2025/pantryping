@@ -1,13 +1,14 @@
 //
-//  SchemaV2.swift
+//  SchemaV3.swift
 //  Pantry Ping
 //
 
 import Foundation
 import SwiftData
 
-// FROZEN: this is the exact shape shipped as version 2. Don't edit it — SchemaV3 is current.
-// Version 2 of the database. It separates four ideas that V1 lumped together:
+// Version 3 of the database: V2 plus a barcode and a nutrition source on each product,
+// so scanned products can be recognized again and their numbers credited.
+// It separates four ideas that V1 lumped together:
 //   Product      — reusable details for a food (name, serving size, nutrition, photo)
 //   GroceryItem  — one purchased package or batch of a product (dates, price, amount left)
 //   UsageEntry   — an amount taken from a package or prepared meal, with a reason
@@ -20,8 +21,8 @@ import SwiftData
 // - Relationships are optional arrays, so iCloud sync stays possible later.
 // - Quantities are whole numbers of thousandths ("milli-units") of a base unit,
 //   so repeated partial uses never pile up floating-point rounding errors.
-enum SchemaV2: VersionedSchema {
-    static let versionIdentifier = Schema.Version(2, 0, 0)
+enum SchemaV3: VersionedSchema {
+    static let versionIdentifier = Schema.Version(3, 0, 0)
 
     static var models: [any PersistentModel.Type] {
         [GroceryItem.self, Product.self, UsageEntry.self, FoodEvent.self,
@@ -48,6 +49,11 @@ enum SchemaV2: VersionedSchema {
         var carbs: Double? = nil
         var protein: Double? = nil
         var fat: Double? = nil
+
+        // Digits of the product's barcode (UPC/EAN), when it was scanned or typed.
+        var barcode: String? = nil
+        // Where the nutrition numbers came from: "entered", "usda", or "openFoodFacts".
+        var nutritionSourceRaw: String? = nil
 
         // `.externalStorage` lets SwiftData keep large data (like photos) in a separate
         // file instead of inside the database row, which keeps the database fast.

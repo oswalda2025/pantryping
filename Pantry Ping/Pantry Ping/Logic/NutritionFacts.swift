@@ -7,7 +7,7 @@ import Foundation
 
 // Calories and macros for some amount of food. Every value is optional: nil means
 // "not entered", which is different from 0 — a missing value is never counted as zero.
-struct NutritionFacts: Equatable {
+nonisolated struct NutritionFacts: Hashable {
     var calories: Double?
     var carbs: Double?
     var protein: Double?

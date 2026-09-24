@@ -18,9 +18,40 @@ struct ProductDraft {
     var carbsText = ""
     var proteinText = ""
     var fatText = ""
+    var barcode: String?
+    // Where the nutrition came from, and the exact numbers it gave. If the user changes
+    // any number, the source becomes "entered by you".
+    var lookupSource: NutritionDataSource?
+    var lookedUpNutrition: NutritionFacts?
 
     init(name: String = "") {
         self.name = name
+    }
+
+    // Pre-filled from a barcode lookup.
+    init(lookup: FoodLookupResult) {
+        name = lookup.name
+        barcode = lookup.barcode
+        servingSizeText = NumberInput.text(lookup.servingSize)
+        servingUnit = lookup.servingUnit
+        caloriesText = Self.text(lookup.nutrition.calories)
+        carbsText = Self.text(lookup.nutrition.carbs)
+        proteinText = Self.text(lookup.nutrition.protein)
+        fatText = Self.text(lookup.nutrition.fat)
+        lookupSource = lookup.source
+        // Compare against the rounded numbers shown, so untouched fields still count as looked up.
+        lookedUpNutrition = nutrition
+    }
+
+    // Nutrition from a database is rounded to one decimal for the form.
+    private static func text(_ value: Double?) -> String {
+        value.map { Quantity.number($0, maxFractionDigits: 1) } ?? ""
+    }
+
+    var nutritionSource: NutritionDataSource? {
+        if nutrition.isEmpty { return nil }
+        if let lookupSource, nutrition == lookedUpNutrition { return lookupSource }
+        return .entered
     }
 
     init(product: Product) {
@@ -34,6 +65,9 @@ struct ProductDraft {
         carbsText = NumberInput.text(product.carbs)
         proteinText = NumberInput.text(product.protein)
         fatText = NumberInput.text(product.fat)
+        barcode = product.barcode
+        lookupSource = product.nutritionSource
+        lookedUpNutrition = product.nutrition
     }
 
     var trimmedName: String {
@@ -75,6 +109,10 @@ struct ProductDraft {
         product.servingUnit = servingSize == nil ? nil : servingUnit
         product.servingsPerPackage = servingsPerPackage
         product.nutrition = nutrition
+        product.nutritionSource = nutritionSource
+        if let barcode, !barcode.isEmpty {
+            product.barcode = barcode
+        }
         // Keep each package's copy of the name in sync.
         for package in product.packages ?? [] {
             package.name = product.name
@@ -140,7 +178,11 @@ struct ProductFields: View {
                 NumberField(title: "Fat", text: $draft.fatText, suffix: "g")
             }
         } footer: {
-            Text("All optional, per serving, from the label. The serving size lets Pantry Ping convert between servings and grams. Blanks show as “not entered”, never as zero.")
+            if let source = draft.nutritionSource, source != .entered {
+                Text("From \(source.displayName). Databases can be wrong or out of date — check the numbers against your package. Editing any number marks it as entered by you.")
+            } else {
+                Text("All optional, per serving, from the label. The serving size lets Pantry Ping convert between servings and grams. Blanks show as “not entered”, never as zero.")
+            }
         }
     }
 }

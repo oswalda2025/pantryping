@@ -116,11 +116,20 @@ struct ProductDetailView: View {
                 }
             }
 
-            Section("Nutrition per serving") {
+            Section {
                 LabeledContent("Calories", value: NutritionFormat.calories(product.calories))
                 LabeledContent("Carbohydrates", value: NutritionFormat.grams(product.carbs))
                 LabeledContent("Protein", value: NutritionFormat.grams(product.protein))
                 LabeledContent("Fat", value: NutritionFormat.grams(product.fat))
+                if let barcode = product.barcode {
+                    LabeledContent("Barcode", value: barcode)
+                }
+            } header: {
+                Text("Nutrition per serving")
+            } footer: {
+                if let source = product.nutritionSource {
+                    Text(source == .entered ? "Entered by you." : "From \(source.displayName) — check against your package.")
+                }
             }
 
             Section {

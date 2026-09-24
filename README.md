@@ -38,6 +38,7 @@ There are also two supporting types:
 | **Kitchen** | Groceries grouped by urgency: **Expired**, **Needs Attention**, **Use Soon**, and **Your Food**. Each row shows how much is left ("279 g · 4.5 servings"). Also has an All / Fridge / Freezer / Pantry filter and search. |
 | **Kitchen swipe actions** | Swipe right for **Use Some** or **Finished**. Swipe left for **Threw Away**, and for **Still Have It** on expired items. |
 | **Adding groceries** | **+** opens your saved products for **Buy Again**, or **New Product** for something new. A new product asks for its name, an optional photo, and optional serving and nutrition details, together with the first package's size, price, dates, and storage. **Buy Again** only asks for the package details and reuses the product's name, photo, serving size, and nutrition. |
+| **Barcode scanning** | **+ → Scan Barcode** uses the iPhone camera (or you can type the number, e.g. in the Simulator). It looks the barcode up in **USDA FoodData Central** first, then **Open Food Facts**, and pre-fills a New Product form with the name, serving size, calories, macros, and package size for you to check. The product remembers its barcode, so scanning it again goes straight to **Buy Again**. Unknown barcodes still open the form, and are recognized next time. Only the barcode number is sent. |
 | **Photos** | Pick from your library or take one with the camera (on a real phone). The photo is saved once, with the product. |
 | **Use Some** | Enter the amount as servings or as a measured amount (g, kg, oz, lb, ml, cups, tbsp, pieces). You can't take more than what's left. A preview shows what will remain and the nutrition for that amount. **Use All** takes exactly what's left. When a product has several open packages, the one expiring first is suggested, but you can pick any of them. |
 | **Finished / Threw Away** | The item leaves the kitchen and stops getting reminders. Its history is kept, and you can restore it. |
@@ -57,6 +58,17 @@ There are also two supporting types:
 - **Example:** 5 servings × 62 g = **310 g**. Using 31 g leaves **279 g**, which is **4.5 servings**.
 - You can't log more than what remains, inventory can't go negative, and fractional servings work (for example, 0.25 servings = 15.5 g).
 
+## Barcode lookup
+
+- **USDA FoodData Central** (Branded Foods) is official US label data from manufacturers. It needs a free API key: add yours in **⋯ → Settings → Barcode Lookup**. Without one, USDA's shared demo key allows only a few lookups per hour, and lookups fall back to Open Food Facts.
+- **Open Food Facts** is a worldwide, crowd-sourced database that needs no key. Quality varies.
+- **Unit conversions:**
+  - USDA stores barcodes padded to 14 digits (GTIN-14), so the app pads scanned codes before searching.
+  - USDA gives nutrients per 100 g plus the label's serving size, so per serving = value × serving ÷ 100.
+  - Open Food Facts gives per-serving values directly when available. When a product has no serving size, one "serving" is shown as 100 g.
+- **Where the numbers came from is always visible.** Products remember their nutrition source ("USDA FoodData Central", "Open Food Facts", or "Entered by you"), and editing any number marks it as entered by you.
+- **Tests:** the parsers are tested against real responses captured from both services.
+
 ## Food-safety notes
 
 - Pantry Ping mostly relies on **dates you enter**. A food-safety reviewer approved the small set of suggestions it offers. They come from USDA FSIS, use the conservative end of each range, and appear only when you tap **Use Suggestion**:
@@ -69,7 +81,7 @@ There are also two supporting types:
 ## Decisions and assumptions
 
 - **SwiftData with versioned schemas.**
-  - `SchemaV1` is the original frozen shape. `SchemaV2` is the current one.
+  - `SchemaV1` and `SchemaV2` are frozen past shapes, and `SchemaV3` is the current one. V3 adds `barcode` and `nutritionSourceRaw` to products, as an automatic lightweight migration.
   - `PantryPingMigrationPlan` upgrades old data: each old item becomes a package counted in pieces, items with the same name share one saved product, and a "Bought" history line is added.
   - A unit test opens a real V1 database file to check this, and it was also checked on an existing simulator install.
 - **Every stored property has a default**, relationships are optional, and enums are saved as raw strings that must never be renamed.
@@ -110,5 +122,5 @@ These are deferred, following the roadmap:
 ## Development notes
 
 - **UI tests launch with `-uiTesting`**, which uses an in-memory database, and with `-remindersEnabled NO`.
-- **After the first App Store release**, any model change needs a `SchemaV3` and a new migration stage.
+- **Any model change** needs a new frozen schema version (`SchemaV4`) and a migration stage, because real data now exists on devices.
 - **Food-safety wording** lives in `Models/FoodState.swift` and `Logic/StorageGuidance.swift`.

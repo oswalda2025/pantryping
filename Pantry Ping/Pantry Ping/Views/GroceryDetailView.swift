@@ -246,6 +246,10 @@ struct GroceryDetailView: View {
             }
         } header: {
             Text(item.product?.nutrition.isEmpty == false ? "Product · per serving" : "Product")
+        } footer: {
+            if let source = item.product?.nutritionSource, source != .entered {
+                Text("Nutrition from \(source.displayName) — check against your package.")
+            }
         }
     }
 

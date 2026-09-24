@@ -115,7 +115,7 @@ struct GroceryItemTests {
     // the Home and History screens rely on.
     @Test func persistsAndFiltersByStatus() throws {
         let container = try ModelContainer(
-            for: Schema(versionedSchema: SchemaV2.self),
+            for: Schema(versionedSchema: SchemaV3.self),
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         let context = container.mainContext
