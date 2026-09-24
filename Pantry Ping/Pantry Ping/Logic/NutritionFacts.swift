@@ -66,14 +66,12 @@ struct NutritionTotal {
     var carbs = Part()
     var protein = Part()
     var fat = Part()
-    var itemCount = 0
 
     mutating func add(_ facts: NutritionFacts) {
         calories.add(facts.calories)
         carbs.add(facts.carbs)
         protein.add(facts.protein)
         fat.add(facts.fat)
-        itemCount += 1
     }
 
     // The total as facts, keeping only the values every item had.

@@ -18,25 +18,35 @@ enum Money {
     }
 }
 
-// Turns what someone typed into a number, accepting both "4.5" and "4,5".
+// Turns what someone typed into a number. One rule everywhere, whatever the phone's region:
+// "4.5" and "4,5" both mean four and a half; "1,000" and "1,299.50" use the comma for thousands.
 // Empty text means "not entered" (nil), which is different from 0.
 enum NumberInput {
     static func double(_ text: String) -> Double? {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return nil }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        if let number = formatter.number(from: trimmed) {
-            return number.doubleValue
-        }
-        return Double(trimmed.replacingOccurrences(of: ",", with: "."))
+        normalized(text).flatMap(Double.init)
     }
 
     // Money is parsed into Decimal so cents stay exact.
     static func decimal(_ text: String) -> Decimal? {
-        let cleaned = text.filter { $0.isNumber || $0 == "." || $0 == "," }
-        guard !cleaned.isEmpty else { return nil }
-        return Decimal(string: cleaned.replacingOccurrences(of: ",", with: "."))
+        let cleaned = text.filter { $0.isNumber || $0 == "." || $0 == "," || $0 == "-" }
+        return normalized(cleaned).flatMap { Decimal(string: $0, locale: Locale(identifier: "en_US_POSIX")) }
+    }
+
+    // Rewrites typed text in plain "1234.5" form, or nil if it's empty.
+    static func normalized(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.contains(".") {
+            // A dot is the decimal point, so any commas are thousands separators.
+            return trimmed.replacingOccurrences(of: ",", with: "")
+        }
+        let parts = trimmed.split(separator: ",", omittingEmptySubsequences: false)
+        if parts.count == 2, parts[1].count != 3 {
+            // One comma not followed by exactly three digits: a decimal comma ("4,5", "0,25").
+            return "\(parts[0]).\(parts[1])"
+        }
+        // "1,000" or "1,000,000": thousands separators.
+        return trimmed.replacingOccurrences(of: ",", with: "")
     }
 
     // The reverse: a number back into editable text ("" for nil).
@@ -85,5 +95,30 @@ struct SuggestedTag: View {
             .background(.purple.opacity(0.15), in: Capsule())
             .foregroundStyle(.purple)
             .accessibilityLabel("Suggested date")
+    }
+}
+
+// Number keypads have no return key, so forms with number fields get a "Done" button
+// above the keyboard, and dragging the form also dismisses the keyboard.
+struct KeyboardDoneButton: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        // Asks whichever field has the keyboard to give it up.
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                        to: nil, from: nil, for: nil)
+                    }
+                }
+            }
+    }
+}
+
+extension View {
+    func keyboardDoneButton() -> some View {
+        modifier(KeyboardDoneButton())
     }
 }

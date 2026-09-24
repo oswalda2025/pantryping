@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct Pantry_PingApp: App {
@@ -23,6 +24,8 @@ struct Pantry_PingApp: App {
             }
         }
         modelContainer = DatabaseLoader.makeContainer(arguments: arguments)
+        // Without a delegate, iOS hides a reminder that arrives while the app is open.
+        UNUserNotificationCenter.current().delegate = ForegroundNotifications.shared
     }
 
     var body: some Scene {
@@ -35,11 +38,13 @@ struct Pantry_PingApp: App {
 }
 
 // Opens the database, upgrading older versions through the migration plan.
-// If a saved database can't be opened at all, the app must not crash on every launch:
-// the unreadable file is moved aside (never deleted) and the app starts fresh, then
-// explains what happened on the next screen.
+// If the saved database can't be opened (for example, a future update with a migration
+// bug, or a full disk), the app must neither crash nor hide the user's data. It leaves the
+// file exactly as it is, runs on a temporary in-memory database, and asks the user.
+// A later fixed update will then open the untouched data normally.
 enum DatabaseLoader {
-    static let recoveryNoteKey = "databaseRecoveryNote"
+    // Set when the saved database couldn't be opened this launch.
+    private(set) static var failedStoreURL: URL?
 
     static func makeContainer(arguments: [String]) -> ModelContainer {
         let schema = Schema(versionedSchema: SchemaV3.self)
@@ -64,24 +69,29 @@ enum DatabaseLoader {
 
     // Separate so tests can point it at a deliberately broken file.
     static func openOrRecover(schema: Schema, configuration: ModelConfiguration) -> ModelContainer {
+        failedStoreURL = nil
         // `do`/`catch` handles code that can fail (`try`).
         do {
             return try ModelContainer(for: schema, migrationPlan: PantryPingMigrationPlan.self,
                                       configurations: configuration)
         } catch {
-            let backupName = moveAside(storeAt: configuration.url)
-            UserDefaults.standard.set(
-                "Pantry Ping couldn't read its saved data, so it started fresh. The old data was kept in a backup file (\(backupName ?? "unavailable")) and has not been deleted.",
-                forKey: recoveryNoteKey
-            )
+            // Don't touch the file: the problem may be temporary or fixed by an update.
+            failedStoreURL = configuration.url
             do {
-                return try ModelContainer(for: schema, migrationPlan: PantryPingMigrationPlan.self,
-                                          configurations: configuration)
+                return try ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
             } catch {
-                // Even a brand-new database failed (e.g. the device is out of storage).
+                // Even an in-memory database failed, which means the app itself is broken.
                 fatalError("Could not create the Pantry Ping database: \(error)")
             }
         }
+    }
+
+    // Only when the user chooses "Start Fresh": the unreadable file is renamed (never deleted),
+    // so a brand-new database is created on the next launch. Returns the backup's file name.
+    @discardableResult
+    static func moveAsideForFreshStart() -> String? {
+        guard let url = failedStoreURL else { return nil }
+        return moveAside(storeAt: url)
     }
 
     // Renames the store and its companion files (-wal, -shm) to "…-unreadable-<time>".
@@ -97,5 +107,16 @@ enum DatabaseLoader {
             if suffix.isEmpty { backupName = destination.lastPathComponent }
         }
         return backupName
+    }
+}
+
+// Shows the 9 AM reminder as a banner even when Pantry Ping is open at that moment.
+// The delegate must stay alive, hence the shared instance.
+final class ForegroundNotifications: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = ForegroundNotifications()
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
+        -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
     }
 }

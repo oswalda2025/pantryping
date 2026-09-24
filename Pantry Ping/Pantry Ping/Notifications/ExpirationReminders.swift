@@ -120,9 +120,24 @@ enum ExpirationReminders {
         }
     }
 
+    // The reschedule currently running, so each new one waits for the previous one to
+    // finish. Without this, an older run could add reminders after a newer run cleared them
+    // (e.g. for an item that was just finished).
+    private static var latestReschedule: Task<Void, Never>?
+
     /// Replaces all of our pending reminders with a fresh plan.
     /// Always removes first, so turning reminders off (or losing permission) clears them.
     static func reschedule(for items: [ReminderItem], enabled: Bool) async {
+        let previous = latestReschedule
+        let current = Task {
+            await previous?.value
+            await performReschedule(for: items, enabled: enabled)
+        }
+        latestReschedule = current
+        await current.value
+    }
+
+    private static func performReschedule(for items: [ReminderItem], enabled: Bool) async {
         let center = UNUserNotificationCenter.current()
 
         let ours = await center.pendingNotificationRequests()
@@ -130,14 +145,11 @@ enum ExpirationReminders {
             .filter { $0.hasPrefix(identifierPrefix) }
         center.removePendingNotificationRequests(withIdentifiers: ours)
 
-        // `.task(id:)` cancels an older run when a newer one starts; stop here so the
-        // older run can't re-add reminders the newer run just cleared.
-        guard enabled, !Task.isCancelled else { return }
+        guard enabled else { return }
         let status = await center.notificationSettings().authorizationStatus
         guard status == .authorized || status == .provisional || status == .ephemeral else { return }
 
         for reminder in plan(for: items, now: Date(), calendar: .current) {
-            if Task.isCancelled { return }
             let content = UNMutableNotificationContent()
             content.title = reminder.title
             content.body = reminder.body

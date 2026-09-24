@@ -37,7 +37,6 @@ extension GroceryItem {
     }
 
     var remainingAmount: Double { Quantity.value(remainingAmountMilli) }
-    var startingAmount: Double { Quantity.value(startingAmountMilli) }
 
     var remainingServings: Double? {
         converter.servings(fromBase: remainingAmount)
@@ -125,6 +124,15 @@ extension GroceryItem {
         guard remainingAmountMilli > 0 else { return }
         status = .active
         addEvent(.restored, date: date)
+    }
+
+    // Permanently deletes this package. What was eaten stays in the Food Log; its other
+    // use records (meal prep, other) belong only to this package, so they go with it.
+    func delete(in context: ModelContext) {
+        for entry in usageEntries ?? [] where entry.reason != .ate {
+            context.delete(entry)
+        }
+        context.delete(self)
     }
 
     // Moves the package somewhere else and records it, e.g. from the edit form.

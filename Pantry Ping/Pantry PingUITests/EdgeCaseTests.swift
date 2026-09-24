@@ -29,13 +29,11 @@ final class EdgeCaseTests: PantryPingUITestCase {
         XCTAssertTrue(element(containing: "more than what's left").waitForExistence(timeout: 5))
         XCTAssertFalse(save.isEnabled)
 
-        app.textFields["Amount"].typeText(XCUIKeyboardKey.delete.rawValue)
-        app.textFields["Amount"].typeText("0")
+        type(XCUIKeyboardKey.delete.rawValue + "0", into: app.textFields["Amount"])
         XCTAssertTrue(element(containing: "greater than zero").waitForExistence(timeout: 5))
         XCTAssertFalse(save.isEnabled)
 
-        app.textFields["Amount"].typeText(XCUIKeyboardKey.delete.rawValue)
-        app.textFields["Amount"].typeText("0.5")
+        type(XCUIKeyboardKey.delete.rawValue + "0.5", into: app.textFields["Amount"])
         XCTAssertTrue(element(containing: "Leaves 0.5 pieces").waitForExistence(timeout: 5))
         XCTAssertTrue(element(containing: "Nutrition not entered for this product").exists)
         XCTAssertTrue(save.isEnabled)

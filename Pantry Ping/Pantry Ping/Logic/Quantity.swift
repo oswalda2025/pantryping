@@ -24,8 +24,12 @@ enum Quantity {
 
     // Converting "1 portion" of a 3-portion meal gives 333.333…, so three portions would
     // leave 0.001 behind forever. An amount within a hair of what's left means "the rest".
-    static func snapped(_ milli: Int, toRemaining remaining: Int, tolerance: Int = 5) -> Int {
-        abs(milli - remaining) <= tolerance ? remaining : milli
+    // The tolerance grows with the amount (0.05%, at least 0.005 units), because unit
+    // conversion rounds bigger amounts more: the 16th 1-oz serving of a 16-oz package is
+    // 28.350 g, but only 28.342 g is left.
+    static func snapped(_ milli: Int, toRemaining remaining: Int) -> Int {
+        let tolerance = max(5, milli / 2000)
+        return abs(milli - remaining) <= tolerance ? remaining : milli
     }
 
     static func value(_ milli: Int) -> Double {

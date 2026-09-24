@@ -49,7 +49,8 @@ class PantryPingUITestCase: XCTestCase {
     }
 
     // Types into a field after making sure THIS field has keyboard focus (a keyboard
-    // already open for the previous field doesn't count).
+    // already open for the previous field doesn't count), then closes the keyboard with the
+    // app's "Done" button — like a person would before moving to a field hidden behind it.
     func type(_ text: String, into field: XCUIElement) {
         XCTAssertTrue(field.waitForExistence(timeout: 5), "\(field) not found")
         for _ in 0..<4 {
@@ -57,6 +58,10 @@ class PantryPingUITestCase: XCTestCase {
             if (field.value(forKey: "hasKeyboardFocus") as? Bool) == true { break }
         }
         field.typeText(text)
+        let done = app.toolbars.buttons["Done"]
+        if done.exists && done.isHittable {
+            done.tap()
+        }
     }
 
     // Search narrows the list so the row is on screen.

@@ -58,7 +58,7 @@ struct HistoryView: View {
                 presenting: itemToDelete
             ) { item in
                 Button("Delete", role: .destructive) {
-                    withAnimation { modelContext.delete(item) }
+                    withAnimation { item.delete(in: modelContext) }
                 }
             } message: { _ in
                 Text("It will no longer count in your history.")

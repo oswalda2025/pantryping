@@ -14,6 +14,8 @@ struct EatPortionSheet: View {
     @State private var unit: MeasureUnit
     @State private var date = Date.now
     @State private var errorMessage: String?
+    // Blocks a second tap on Save from logging the portion twice.
+    @State private var isSaving = false
 
     init(meal: PreparedMeal) {
         self.meal = meal
@@ -92,19 +94,22 @@ struct EatPortionSheet: View {
             }
             .navigationTitle("Eat \(meal.name)")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        guard let milli = validMilli else { return }
+                        guard let milli = validMilli, !isSaving else { return }
+                        isSaving = true
                         do {
                             try meal.eat(milli, on: date)
                             dismiss()
                         } catch {
                             errorMessage = error.localizedDescription
+                            isSaving = false
                         }
                     }
-                    .disabled(validMilli == nil)
+                    .disabled(validMilli == nil || isSaving)
                 }
             }
         }

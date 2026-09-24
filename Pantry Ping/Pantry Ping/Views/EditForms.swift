@@ -53,7 +53,10 @@ struct EditPackageView: View {
                 } header: {
                     Text("Use By")
                 } footer: {
-                    if item.expirationSource == .suggested {
+                    if hasUseByDate && Calendar.current.startOfDay(for: useByDate) < Calendar.current.startOfDay(for: purchaseDate) {
+                        Text("The use-by date is before the purchase date — double-check it.")
+                            .foregroundStyle(.orange)
+                    } else if item.expirationSource == .suggested {
                         Text("The current date is a suggestion from general guidance. Changing it makes it your own date.")
                     }
                 }
@@ -80,6 +83,7 @@ struct EditPackageView: View {
             }
             .navigationTitle("Edit \(item.displayName)")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -141,6 +145,7 @@ struct EditProductView: View {
             }
             .navigationTitle("Edit Product")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

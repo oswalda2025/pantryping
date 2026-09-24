@@ -22,6 +22,8 @@ struct GroceryDetailView: View {
     // Deleting waits until this screen has closed, so it never shows a deleted item.
     @State private var deleteWhenClosed = false
     @State private var shoppingListMessage: String?
+    // A use-up the user asked to undo, waiting for confirmation.
+    @State private var usageToUndo: UsageEntry?
 
     // Every sheet this screen can show. One enum means two sheets can't collide.
     private enum DetailSheet: Identifiable {
@@ -88,7 +90,7 @@ struct GroceryDetailView: View {
         }
         .onDisappear {
             if deleteWhenClosed {
-                modelContext.delete(item)
+                item.delete(in: modelContext)
             }
         }
     }
@@ -106,7 +108,9 @@ struct GroceryDetailView: View {
             UseSomeSheet(package: item)
         case .buyAgain:
             NavigationStack {
-                BuyAgainView(product: ensureProduct(), showsCancel: true) { _ in self.sheet = nil }
+                if let product = item.product {
+                    BuyAgainView(product: product, showsCancel: true) { _ in self.sheet = nil }
+                }
             }
         case .updateDate:
             UseByDateSheet(item: item, newState: nil)
@@ -161,11 +165,12 @@ struct GroceryDetailView: View {
             if item.status == .active && (status == .expired || item.shouldSuggestUseByDate) {
                 VStack(alignment: .leading, spacing: 8) {
                     if status == .expired {
-                        Text(FoodState.expiredGuidance)
+                        Text(item.pastDateGuidance)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
-                    Button(status == .expired ? "Still Have It — Update Date" : "Add a Use-By Date") {
+                    Button(status != .expired ? "Add a Use-By Date"
+                           : item.isPastDateRisky ? "Update Date" : "Still Have It — Update Date") {
                         sheet = .updateDate
                     }
                 }
@@ -216,7 +221,7 @@ struct GroceryDetailView: View {
                     item.restoreToKitchen()
                 }
             } else if item.remainingAmountMilli == 0 {
-                Text("All of it was used, so there's nothing to move back. Undo a Food Log entry to put an amount back.")
+                Text("All of it was used, so there's nothing to move back. To put an amount back, swipe left on a use in History below.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -237,7 +242,11 @@ struct GroceryDetailView: View {
                 }
                 Button("Edit Product", systemImage: "pencil") { sheet = .editProduct }
             }
-            Button("Buy Again", systemImage: "arrow.clockwise") { sheet = .buyAgain }
+            Button("Buy Again", systemImage: "arrow.clockwise") {
+                // Make sure a product exists before the sheet appears (older items may lack one).
+                _ = ensureProduct()
+                sheet = .buyAgain
+            }
             Button("Add to Shopping List", systemImage: "cart.badge.plus", action: addToShoppingList)
             if let shoppingListMessage {
                 Text(shoppingListMessage)
@@ -289,7 +298,7 @@ struct GroceryDetailView: View {
 
     // Events (bought, frozen, moved...) and usage merged into one timeline, newest first.
     private var historySection: some View {
-        Section("History") {
+        Section {
             ForEach(timeline) { entry in
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: entry.systemImage)
@@ -309,26 +318,56 @@ struct GroceryDetailView: View {
                     }
                 }
                 .accessibilityElement(children: .combine)
+                // Any use-up (eaten, meal prep, or other) can be undone here to fix mistakes.
+                .swipeActions {
+                    if let usage = entry.usage {
+                        Button("Undo", systemImage: "arrow.uturn.backward") { usageToUndo = usage }
+                            .tint(.orange)
+                    }
+                }
             }
+        } header: {
+            Text("History")
+        } footer: {
+            if item.usageEntries?.isEmpty == false {
+                Text("Swipe left on a use to undo it and put the amount back.")
+            }
+        }
+        .confirmationDialog(
+            "Put \(usageToUndo?.amountText ?? "it") back?",
+            isPresented: Binding(get: { usageToUndo != nil }, set: { if !$0 { usageToUndo = nil } }),
+            titleVisibility: .visible,
+            presenting: usageToUndo
+        ) { usage in
+            Button("Undo This Use", role: .destructive) {
+                withAnimation { usage.undo(in: modelContext) }
+            }
+        } message: { usage in
+            Text(usage.reason == .mealPrep
+                 ? "The amount goes back into this package. The meal it was used in keeps its ingredient list."
+                 : "The amount goes back into this package and the entry is removed.")
         }
     }
 
     private struct TimelineEntry: Identifiable {
-        let id = UUID()
+        // A stable identity (the database ID), so rows don't redraw as new ones every time.
+        let id: PersistentIdentifier
         let date: Date
         let systemImage: String
         let title: String
         let detail: String
+        var usage: UsageEntry?
     }
 
     private var timeline: [TimelineEntry] {
         let events = (item.events ?? []).map { event in
             let kind = FoodEventKind(rawValue: event.kindRaw) ?? .note
-            return TimelineEntry(date: event.date, systemImage: kind.systemImage, title: kind.title, detail: event.detail)
+            return TimelineEntry(id: event.persistentModelID, date: event.date, systemImage: kind.systemImage,
+                                 title: kind.title, detail: event.detail)
         }
         let uses = (item.usageEntries ?? []).map { entry in
-            TimelineEntry(date: entry.date, systemImage: entry.reason.systemImage,
-                          title: "Used \(entry.amountText)", detail: entry.reason.displayName)
+            TimelineEntry(id: entry.persistentModelID, date: entry.date, systemImage: entry.reason.systemImage,
+                          title: "Used \(entry.amountText)", detail: entry.reason.displayName, usage: entry)
         }
         return (events + uses).sorted { $0.date > $1.date }
     }

@@ -101,7 +101,13 @@ struct PackageFields: View {
         } header: {
             Text("Use By")
         } footer: {
-            Text("Use the date on the package. Leave it off for things like rice or canned goods.")
+            if draft.hasUseByDate && Calendar.current.startOfDay(for: draft.useByDate) < Calendar.current.startOfDay(for: draft.purchaseDate) {
+                // A warning, not a block: adding food you already had can legitimately be past date.
+                Text("The use-by date is before the purchase date — double-check it.")
+                    .foregroundStyle(.orange)
+            } else {
+                Text("Use the date on the package. Leave it off for things like rice or canned goods.")
+            }
         }
 
         Section("Stored In") {

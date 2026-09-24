@@ -241,6 +241,7 @@ struct MealDetailView: View {
         }
         .navigationTitle(meal.name)
         .navigationBarTitleDisplayMode(.inline)
+        .keyboardDoneButton()
         .toolbar {
             Button("Edit") { isEditing = true }
         }
@@ -304,12 +305,12 @@ struct MealDetailView: View {
         case .calculated:
             let missing = meal.ingredientsMissingCalories
             return missing == 0
-                ? "Calculated from ingredients."
+                ? "Calculated from ingredients\(meal.ingredients?.contains { $0.fromInventory } == true ? " (may include database values — check against labels)" : "")."
                 : "Calculated from ingredients. \(missing) ingredient\(missing == 1 ? " has" : "s have") no calories entered, so calories aren't shown."
         case .none:
             let count = meal.ingredients?.count ?? 0
             return count == 0
-                ? "Add nutrition by editing the meal, if you want to track it."
+                ? "No nutrition was entered for this meal."
                 : "Not enough ingredient nutrition to calculate this."
         }
     }
@@ -351,6 +352,7 @@ struct EditMealView: View {
             }
             .navigationTitle("Edit Meal")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -377,12 +379,16 @@ struct MealStorageFields: View {
     @Binding var hasUseByDate: Bool
     @Binding var useByDate: Date
     @Binding var source: ExpirationSource
+    // True when an ingredient came from a package past its date: cooking doesn't make
+    // spoiled food safe, so the leftovers suggestion needs a warning.
+    var hasPastDateIngredients = false
     // The exact day that was filled in from the suggestion. A date only stays "suggested"
     // while it's still exactly this day.
     @State private var appliedSuggestionDate: Date?
 
     init(storage: Binding<StorageLocation>, preparedDate: Date, hasUseByDate: Binding<Bool>,
-         useByDate: Binding<Date>, source: Binding<ExpirationSource>) {
+         useByDate: Binding<Date>, source: Binding<ExpirationSource>, hasPastDateIngredients: Bool = false) {
+        self.hasPastDateIngredients = hasPastDateIngredients
         _storage = storage
         self.preparedDate = preparedDate
         _hasUseByDate = hasUseByDate
@@ -414,6 +420,12 @@ struct MealStorageFields: View {
         if let suggestion {
             Section {
                 Text(suggestion.message).font(.callout)
+                if hasPastDateIngredients {
+                    Label("Some ingredients were past their date. Cooking doesn't make spoiled food safe — this suggestion assumes fresh ingredients.",
+                          systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
                 Button("Use Suggestion: \(suggestion.date(from: preparedDate).formatted(date: .abbreviated, time: .omitted))") {
                     applySuggestion()
                 }

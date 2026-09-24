@@ -3,6 +3,7 @@
 //  Pantry Ping
 //
 
+import AVFoundation
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -28,9 +29,13 @@ struct ProductThumbnail: View {
     var size: CGFloat = 44
     var placeholderSymbol = "takeoutbag.and.cup.and.straw"
 
+    // The decoded, shrunk image. Decoding a photo is slow, so it happens once per photo
+    // (in `.task`) instead of on every redraw — e.g. on every keystroke in a search.
+    @State private var image: UIImage?
+
     var body: some View {
         Group {
-            if let data, let image = UIImage(data: data) {
+            if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -45,6 +50,15 @@ struct ProductThumbnail: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.2))
         .accessibilityHidden(true)
+        // Re-runs only when the photo data changes.
+        .task(id: data) {
+            guard let data, let full = UIImage(data: data) else {
+                image = nil
+                return
+            }
+            let pixels = size * 3
+            image = await full.byPreparingThumbnail(ofSize: CGSize(width: pixels, height: pixels)) ?? full
+        }
     }
 }
 
@@ -54,6 +68,7 @@ struct ProductPhotoPicker: View {
     @Binding var photoData: Data?
     @State private var selection: PhotosPickerItem?
     @State private var isShowingCamera = false
+    @State private var isShowingCameraDenied = false
 
     var body: some View {
         HStack(spacing: 14) {
@@ -61,10 +76,24 @@ struct ProductPhotoPicker: View {
             VStack(alignment: .leading, spacing: 8) {
                 PhotosPicker(photoData == nil ? "Choose Photo" : "Change Photo", selection: $selection, matching: .images)
                 if CameraPicker.isAvailable {
-                    Button("Take Photo") { isShowingCamera = true }
+                    Button("Take Photo") {
+                        // Ask for (or check) camera access first; a denied camera would
+                        // otherwise open as a black screen.
+                        Task {
+                            if await CameraPicker.hasAccess() {
+                                isShowingCamera = true
+                            } else {
+                                isShowingCameraDenied = true
+                            }
+                        }
+                    }
                 }
                 if photoData != nil {
-                    Button("Remove Photo", role: .destructive) { photoData = nil }
+                    Button("Remove Photo", role: .destructive) {
+                        photoData = nil
+                        // Clear the picker too, so choosing the same photo again works.
+                        selection = nil
+                    }
                 }
             }
             // Borderless buttons stay separately tappable inside a Form row.
@@ -78,6 +107,14 @@ struct ProductPhotoPicker: View {
                   let data = try? await selection.loadTransferable(type: Data.self),
                   let image = UIImage(data: data) else { return }
             photoData = ProductPhoto.jpegData(from: image)
+        }
+        .alert("Camera Access Is Off", isPresented: $isShowingCameraDenied) {
+            if let settings = URL(string: UIApplication.openSettingsURLString) {
+                Link("Open Settings", destination: settings)
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Turn on the camera for Pantry Ping in Settings to take product photos. You can still choose a photo from your library.")
         }
         .fullScreenCover(isPresented: $isShowingCamera) {
             CameraPicker { image in
@@ -93,6 +130,15 @@ struct ProductPhotoPicker: View {
 struct CameraPicker: UIViewControllerRepresentable {
     static var isAvailable: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)
+    }
+
+    // Asks the first time; afterwards reports the user's choice.
+    static func hasAccess() async -> Bool {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: return true
+        case .notDetermined: return await AVCaptureDevice.requestAccess(for: .video)
+        default: return false
+        }
     }
 
     let onCapture: (UIImage) -> Void

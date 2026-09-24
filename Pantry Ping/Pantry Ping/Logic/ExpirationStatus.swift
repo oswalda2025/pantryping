@@ -67,16 +67,6 @@ enum ExpirationStatus: Int, CaseIterable, Comparable {
         }
     }
 
-    var sectionTitle: String {
-        switch self {
-        case .expired: "Expired"
-        case .urgent: "Needs Attention"
-        case .useSoon: "Use Soon"
-        case .fresh: "Fresh"
-        case .noDate: "No Date"
-        }
-    }
-
     var systemImage: String {
         switch self {
         case .expired: "xmark.octagon.fill"

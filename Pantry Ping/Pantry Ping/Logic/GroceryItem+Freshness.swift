@@ -28,7 +28,20 @@ extension GroceryItem {
             let daysInState = -(ExpirationStatus.daysRemaining(until: stateDate, now: now, calendar: calendar) ?? 0)
             return foodState == .frozen && daysInState >= 90 ? text + " · check quality" : text
         }
-        return "No date · Added \(GroceryItem.relativeDayText(from: dateAdded, now: now, calendar: calendar))"
+        let added = "No date · Added \(GroceryItem.relativeDayText(from: dateAdded, now: now, calendar: calendar))"
+        // Food bought frozen gets the same gentle quality reminder after 90 days.
+        let daysSinceAdded = -(ExpirationStatus.daysRemaining(until: dateAdded, now: now, calendar: calendar) ?? 0)
+        return storageLocation == .freezer && daysSinceAdded >= 90 ? added + " · check quality" : added
+    }
+
+    // Leftovers, thawed food, and suggested (guidance) dates can't be judged by look and
+    // smell once past, so they get stricter wording than an ordinary package date.
+    var isPastDateRisky: Bool {
+        foodState == .cooked || foodState == .thawed || expirationSource == .suggested
+    }
+
+    var pastDateGuidance: String {
+        isPastDateRisky ? FoodState.expiredLeftoverGuidance : FoodState.expiredGuidance
     }
 
     // Opened, cooked, or thawed food with no use-by date deserves a gentle nudge:

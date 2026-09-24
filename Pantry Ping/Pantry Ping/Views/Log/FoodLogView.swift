@@ -33,7 +33,10 @@ struct FoodLogView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // Worked out once per redraw instead of once for every place that shows them.
+        let entries = self.entries
+        let total = self.total
+        return NavigationStack {
             List {
                 Section {
                     daySwitcher
@@ -65,7 +68,7 @@ struct FoodLogView: View {
                     } header: {
                         Text("Eaten")
                     } footer: {
-                        Text("Swipe left to undo an entry. The amount goes back to its package or meal.")
+                        Text("Swipe left to undo an entry. The amount goes back to its package or meal, if it still exists.")
                     }
                 }
             }

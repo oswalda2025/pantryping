@@ -96,7 +96,12 @@ enum FoodState: String, CaseIterable, Identifiable {
         }
     }
 
-    static let expiredGuidance = "This date has passed. Many dates are about quality rather than safety, so check how it looks and smells — when in doubt, throw it out."
+    // For a package date that has passed: many printed dates are about quality.
+    static let expiredGuidance = "This date has passed. Many package dates are about quality rather than safety, so check how it looks and smells — when in doubt, throw it out."
 
-    static let disclaimer = "Pantry Ping only shows the dates you enter and general tips. It can't tell whether food is safe — check labels, use your judgment, or see foodsafety.gov."
+    // For leftovers, thawed food, or a passed suggested date, "look and smell" is wrong advice:
+    // the bacteria that make people sick usually can't be seen or smelled.
+    static let expiredLeftoverGuidance = "Cooked leftovers and thawed food past their window should be thrown out — harmful bacteria usually can't be seen or smelled."
+
+    static let disclaimer = "Pantry Ping shows the dates you enter, suggested dates from general USDA guidance, and nutrition from databases that can be wrong. It can't tell whether food is safe — check labels, use your judgment, or see foodsafety.gov."
 }

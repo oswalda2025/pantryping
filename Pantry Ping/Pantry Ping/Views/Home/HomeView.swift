@@ -65,7 +65,8 @@ struct HomeView: View {
                                 }
                                 .tint(.red)
                                 if item.expirationStatus(now: now) == .expired {
-                                    Button("Still Have It", systemImage: "arrow.uturn.backward") {
+                                    Button(item.isPastDateRisky ? "Update Date" : "Still Have It",
+                                           systemImage: "arrow.uturn.backward") {
                                         itemToRedate = item
                                     }
                                     .tint(.blue)
@@ -235,11 +236,12 @@ private struct PantrySummary: View {
         case (0, 0):
             return "Nothing urgent — \(groceries.count) \(groceries.count == 1 ? "item" : "items") in your kitchen."
         case (0, _):
-            return "\(urgent) \(urgent == 1 ? "item needs" : "items need") using today or tomorrow."
+            return "\(urgent) \(urgent == 1 ? "item needs" : "items need") attention — use today or tomorrow."
         case (_, 0):
-            return "\(expired) \(expired == 1 ? "item is" : "items are") past its date."
+            return "\(expired) \(expired == 1 ? "item is" : "items are") past \(expired == 1 ? "its" : "their") date."
         default:
-            return "\(urgent) to use soon · \(expired) past date."
+            // Matches the section names below: "Needs Attention" and "Expired".
+            return "\(urgent) \(urgent == 1 ? "needs" : "need") attention · \(expired) past date."
         }
     }
 }

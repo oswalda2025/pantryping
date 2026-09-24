@@ -57,7 +57,7 @@ struct UseByDateSheet: View {
             return newState.guidance(from: item.foodState)
         }
         if item.expirationStatus(now: now) == .expired {
-            return FoodState.expiredGuidance
+            return item.pastDateGuidance
         }
         return "Set the date you plan to use this by. Check the label if you're not sure."
     }
@@ -114,6 +114,7 @@ struct UseByDateSheet: View {
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

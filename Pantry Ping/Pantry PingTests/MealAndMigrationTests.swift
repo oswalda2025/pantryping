@@ -263,30 +263,41 @@ struct MigrationTests {
     }
 }
 
-// If the saved database can't be opened, the app starts fresh instead of crashing on
-// every launch, and keeps the unreadable file as a backup.
+// If the saved database can't be opened, the app neither crashes nor hides the data: the
+// file is left untouched (a fixed update can still open it) and the app runs in memory.
 @MainActor
 struct DatabaseRecoveryTests {
-    @Test func unreadableDatabaseIsMovedAsideNotDeleted() throws {
+    @Test func unreadableDatabaseIsLeftUntouchedUntilTheUserChoosesToStartFresh() throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        defer {
-            try? FileManager.default.removeItem(at: folder)
-            UserDefaults.standard.removeObject(forKey: DatabaseLoader.recoveryNoteKey)
-        }
+        defer { try? FileManager.default.removeItem(at: folder) }
         let url = folder.appending(path: "broken.store")
-        try Data("this is not a database".utf8).write(to: url)
+        let original = Data("this is not a database".utf8)
+        try original.write(to: url)
 
         let container = DatabaseLoader.openOrRecover(schema: Schema(versionedSchema: SchemaV3.self),
                                                      configuration: ModelConfiguration(url: url))
-        // The fresh database works.
+        // The temporary database works...
         let context = ModelContext(container)
         context.insert(Product(name: "Test"))
         try context.save()
+        // ...and the saved file wasn't touched.
+        #expect(try Data(contentsOf: url) == original)
+        #expect(DatabaseLoader.failedStoreURL == url)
 
-        let files = try FileManager.default.contentsOfDirectory(atPath: folder.path)
-        #expect(files.contains { $0.hasPrefix("broken.store-unreadable-") })
-        #expect(UserDefaults.standard.string(forKey: DatabaseLoader.recoveryNoteKey)?.contains("backup") == true)
+        // Only an explicit "Start Fresh" sets it aside — renamed, never deleted.
+        let backup = try #require(DatabaseLoader.moveAsideForFreshStart())
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        #expect(try Data(contentsOf: folder.appending(path: backup)) == original)
+    }
+
+    @Test func healthyDatabaseOpensNormally() throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        _ = DatabaseLoader.openOrRecover(schema: Schema(versionedSchema: SchemaV3.self),
+                                         configuration: ModelConfiguration(url: folder.appending(path: "ok.store")))
+        #expect(DatabaseLoader.failedStoreURL == nil)
     }
 }
 

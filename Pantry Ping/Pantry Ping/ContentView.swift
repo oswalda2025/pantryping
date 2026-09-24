@@ -17,8 +17,10 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
 
     @AppStorage("remindersEnabled") private var remindersEnabled = true
-    // Set by DatabaseLoader if saved data couldn't be opened; shown once, then cleared.
-    @AppStorage(DatabaseLoader.recoveryNoteKey) private var recoveryNote = ""
+    // True when the saved database couldn't be opened this launch (see DatabaseLoader).
+    @State private var isShowingDatabaseProblem = DatabaseLoader.failedStoreURL != nil
+    @State private var isConfirmingFreshStart = false
+    @State private var freshStartMessage: String?
     // False until the welcome flow (name + who it's for) has been completed once.
     @AppStorage(ProfileKeys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
 
@@ -62,13 +64,28 @@ struct ContentView: View {
         )) {
             OnboardingView()
         }
-        .alert("Saved Data Couldn't Be Opened", isPresented: Binding(
-            get: { !recoveryNote.isEmpty },
-            set: { if !$0 { recoveryNote = "" } }
-        )) {
-            Button("OK") { recoveryNote = "" }
+        .alert("Saved Data Couldn't Be Opened", isPresented: $isShowingDatabaseProblem) {
+            Button("Keep My Data", role: .cancel) {}
+            Button("Start Fresh…", role: .destructive) { isConfirmingFreshStart = true }
         } message: {
-            Text(recoveryNote)
+            Text("Nothing has been deleted. Pantry Ping will try again next time it opens — an app update may fix this. Until then, changes you make won't be saved.")
+        }
+        .alert("Start Fresh?", isPresented: $isConfirmingFreshStart) {
+            Button("Cancel", role: .cancel) {}
+            Button("Start Fresh", role: .destructive) {
+                let backup = DatabaseLoader.moveAsideForFreshStart()
+                freshStartMessage = "Your old data was kept in a backup file (\(backup ?? "unavailable")). Close and reopen Pantry Ping to start with an empty kitchen."
+            }
+        } message: {
+            Text("Your current saved data will be set aside in a backup file, not deleted.")
+        }
+        .alert("Reopen Pantry Ping", isPresented: Binding(
+            get: { freshStartMessage != nil },
+            set: { if !$0 { freshStartMessage = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(freshStartMessage ?? "")
         }
         // Refresh "now" whenever the app comes back to the foreground...
         .onChange(of: scenePhase) { _, newPhase in

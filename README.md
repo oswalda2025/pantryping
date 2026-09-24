@@ -42,6 +42,7 @@ There are also two supporting types:
 | **Photos** | Pick from your library or take one with the camera (on a real phone). The photo is saved once, with the product. |
 | **Use Some** | Enter the amount as servings or as a measured amount (g, kg, oz, lb, ml, cups, tbsp, pieces). You can't take more than what's left. A preview shows what will remain and the nutrition for that amount. **Use All** takes exactly what's left. When a product has several open packages, the one expiring first is suggested, but you can pick any of them. |
 | **Finished / Threw Away** | The item leaves the kitchen and stops getting reminders. Its history is kept, and you can restore it. |
+| **Fixing mistakes** | In an item's **History**, swipe left on any use (eaten, meal prep, or other) and choose **Undo** to put the amount back. Undoing an "Ate" entry in the Log does the same. |
 | **Food states** | Open, Cook, Freeze, and Thaw. Each is recorded in the package's history, and the original package date is kept. |
 | **Suggested timelines** | A few general-guidance suggestions, **labeled "suggested" everywhere**: in rows, in the detail view, and in reminders. See the food-safety notes below. |
 | **Meals tab** | Create a meal-prep batch from groceries in your kitchen; this takes the right amounts out of the right packages. The ingredient picker lists the soonest-expiring items first and has a search field. You can also add untracked ingredients or enter a meal by hand without macros. Set portions and/or cooked weight. Nutrition is shown per batch, per portion, and per 100 g when there's enough data. **Eat a Portion** reduces what's left and logs what you ate. |
@@ -85,7 +86,7 @@ There are also two supporting types:
   - `PantryPingMigrationPlan` upgrades old data: each old item becomes a package counted in pieces, items with the same name share one saved product, and a "Bought" history line is added.
   - A unit test opens a real V1 database file to check this, and it was also checked on an existing simulator install.
 - **Every stored property has a default**, relationships are optional, and enums are saved as raw strings that must never be renamed.
-- **If saved data ever can't be opened**, the app doesn't crash on every launch. It moves the unreadable file aside as a backup (never deleting it), starts fresh, and shows a one-time message.
+- **If saved data ever can't be opened** (for example, an update with a migration bug, or a full disk), the app doesn't crash and **doesn't touch the file**. It runs on a temporary in-memory database and explains the problem. A fixed update then opens the untouched data normally. Only if the user chooses **Start Fresh** is the file renamed to a backup (never deleted).
 - **The app saves when it leaves the screen**, so nothing is lost if iOS closes it in the background.
 - **An amount within 0.005 of what's left counts as "the rest"**, so the last of three portions finishes a meal exactly.
 - **Emptied packages can't be moved back to the kitchen.**

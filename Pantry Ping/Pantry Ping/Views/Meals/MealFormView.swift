@@ -30,6 +30,8 @@ struct MealFormView: View {
     @State private var notes = ""
     @State private var isAddingIngredient = false
     @State private var errorMessage: String?
+    // Blocks a second tap on Save from creating the meal (and deducting ingredients) twice.
+    @State private var isSaving = false
 
     private var portions: Double? { NumberInput.double(portionsText).flatMap { $0 > 0 ? $0 : nil } }
     private var weight: Double? { NumberInput.double(weightText).flatMap { $0 > 0 ? $0 : nil } }
@@ -67,7 +69,10 @@ struct MealFormView: View {
                 nutritionSection
 
                 MealStorageFields(storage: $storage, preparedDate: preparedDate,
-                                  hasUseByDate: $hasUseByDate, useByDate: $useByDate, source: $source)
+                                  hasUseByDate: $hasUseByDate, useByDate: $useByDate, source: $source,
+                                  hasPastDateIngredients: ingredients.contains {
+                                      $0.package?.expirationStatus(now: preparedDate) == .expired
+                                  })
 
                 Section {
                     DatePicker("Prepared", selection: $preparedDate, in: ...Date.now, displayedComponents: .date)
@@ -80,11 +85,12 @@ struct MealFormView: View {
             }
             .navigationTitle("New Meal Prep")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", action: save)
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
             .sheet(isPresented: $isAddingIngredient) {
@@ -150,9 +156,16 @@ struct MealFormView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         var manual: NutritionFacts?
         if entersNutritionManually {
+            for text in [caloriesText, carbsText, proteinText, fatText] where !text.isEmpty {
+                guard let value = NumberInput.double(text), value >= 0 else {
+                    errorMessage = "Nutrition values must be numbers of zero or more."
+                    return
+                }
+            }
             let entered = NutritionFacts(
                 calories: NumberInput.double(caloriesText),
                 carbs: NumberInput.double(carbsText),
@@ -169,6 +182,7 @@ struct MealFormView: View {
                 manual = entered
             }
         }
+        isSaving = true
         do {
             _ = try MealPrep.makeMeal(
                 name: trimmed,
@@ -185,6 +199,7 @@ struct MealFormView: View {
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+            isSaving = false
         }
     }
 }
@@ -311,6 +326,7 @@ struct IngredientPickerSheet: View {
             }
             .navigationTitle("Add Ingredient")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .searchable(text: $searchText, isPresented: $isSearching,
                         placement: .navigationBarDrawer(displayMode: .always), prompt: "Search your kitchen")
             .toolbar {

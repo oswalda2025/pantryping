@@ -85,6 +85,8 @@ struct ProductDetailView: View {
     @State private var isBuying = false
     @State private var isEditing = false
     @State private var isConfirmingDelete = false
+    // Deleting waits until this screen has closed, so it never shows a deleted product.
+    @State private var deleteWhenClosed = false
     @State private var message: String?
 
     private var pastPackages: [GroceryItem] {
@@ -185,9 +187,12 @@ struct ProductDetailView: View {
         .sheet(isPresented: $isEditing) {
             EditProductView(product: product)
         }
+        .onDisappear {
+            if deleteWhenClosed { modelContext.delete(product) }
+        }
         .confirmationDialog("Delete \(product.name)?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
-                modelContext.delete(product)
+                deleteWhenClosed = true
                 dismiss()
             }
         }

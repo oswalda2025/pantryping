@@ -20,6 +20,8 @@ struct UseSomeSheet: View {
     // "Use all" takes exactly what's left, avoiding any rounding from unit conversion.
     @State private var usesEverything = false
     @State private var errorMessage: String?
+    // Blocks a second tap on Save from taking the amount twice.
+    @State private var isSaving = false
 
     init(package: GroceryItem) {
         _package = State(initialValue: package)
@@ -132,13 +134,14 @@ struct UseSomeSheet: View {
             }
             .navigationTitle("Use Some")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", action: save)
-                        .disabled(validMilli == nil)
+                        .disabled(validMilli == nil || isSaving)
                 }
             }
             // Typing again after "Use all" means the user wants a specific amount.
@@ -179,7 +182,12 @@ struct UseSomeSheet: View {
         guard let milli = validMilli else { return "Enter an amount to see nutrition." }
         let facts = package.nutrition(forMilli: milli)
         if let summary = NutritionFormat.summary(facts) {
-            return facts.calories == nil ? "\(summary) · calories not entered" : summary
+            let text = facts.calories == nil ? "\(summary) · calories not entered" : summary
+            // Database numbers are credited and flagged, never presented as certain.
+            if let source = package.product?.nutritionSource, source != .entered {
+                return "\(text)\nFrom \(source.displayName) — check against your package."
+            }
+            return text
         }
         return "Nutrition not entered for this product."
     }
@@ -201,12 +209,14 @@ struct UseSomeSheet: View {
     }
 
     private func save() {
-        guard let milli = validMilli else { return }
+        guard let milli = validMilli, !isSaving else { return }
+        isSaving = true
         do {
             try package.use(milli, reason: reason, on: date)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+            isSaving = false
         }
     }
 }

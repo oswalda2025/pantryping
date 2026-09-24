@@ -36,6 +36,8 @@ struct NewGroceryView: View {
     @State private var package: PackageDraft
     @State private var errorMessage: String?
     @State private var lastAutoFill: String?
+    // Blocks a second tap on Save from creating the product and package twice.
+    @State private var isSaving = false
 
     @MainActor
     init(prefillName: String = "", showsCancel: Bool = false, lookup: FoodLookupResult? = nil,
@@ -94,7 +96,7 @@ struct NewGroceryView: View {
             if let match = existingMatch {
                 Section {
                     NavigationLink {
-                        BuyAgainView(product: match, onSaved: onSaved)
+                        BuyAgainView(product: match, barcode: barcode, onSaved: onSaved)
                     } label: {
                         Label("“\(match.name)” is already saved — buy it again instead", systemImage: "arrow.clockwise")
                     }
@@ -112,6 +114,7 @@ struct NewGroceryView: View {
         }
         .navigationTitle("New Product")
         .navigationBarTitleDisplayMode(.inline)
+        .keyboardDoneButton()
         .toolbar {
             if showsCancel {
                 ToolbarItem(placement: .cancellationAction) {
@@ -120,7 +123,7 @@ struct NewGroceryView: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: save)
-                    .disabled(product.trimmedName.isEmpty)
+                    .disabled(product.trimmedName.isEmpty || isSaving)
             }
         }
         // When "servings per package" is typed and the package size hasn't been edited by
@@ -155,6 +158,7 @@ struct NewGroceryView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
         if let problem = product.problem ?? package.problem {
             errorMessage = problem
             return
@@ -171,6 +175,7 @@ struct NewGroceryView: View {
                 storageLocation: package.storageLocation,
                 notes: package.notes
             )
+            isSaving = true
             modelContext.insert(newProduct)
             modelContext.insert(newPackage)
             PackageDraft.rememberLocation(package.storageLocation)
@@ -186,6 +191,9 @@ struct NewGroceryView: View {
 struct BuyAgainView: View {
     let product: Product
     var showsCancel = false
+    // A barcode just scanned; saved onto the product if it doesn't have one yet,
+    // so the next scan recognizes it.
+    var barcode: String?
     var onSaved: (GroceryItem) -> Void
 
     @Environment(\.modelContext) private var modelContext
@@ -193,10 +201,14 @@ struct BuyAgainView: View {
 
     @State private var package: PackageDraft
     @State private var errorMessage: String?
+    // Blocks a second tap on Save from adding the package twice.
+    @State private var isSaving = false
 
-    init(product: Product, showsCancel: Bool = false, onSaved: @escaping (GroceryItem) -> Void) {
+    init(product: Product, showsCancel: Bool = false, barcode: String? = nil,
+         onSaved: @escaping (GroceryItem) -> Void) {
         self.product = product
         self.showsCancel = showsCancel
+        self.barcode = barcode
         self.onSaved = onSaved
         _package = State(initialValue: PackageDraft(product: product))
     }
@@ -222,6 +234,7 @@ struct BuyAgainView: View {
         }
         .navigationTitle("Buy Again")
         .navigationBarTitleDisplayMode(.inline)
+        .keyboardDoneButton()
         .toolbar {
             if showsCancel {
                 ToolbarItem(placement: .cancellationAction) {
@@ -230,11 +243,13 @@ struct BuyAgainView: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: save)
+                    .disabled(isSaving)
             }
         }
     }
 
     private func save() {
+        guard !isSaving else { return }
         if let problem = package.problem {
             errorMessage = problem
             return
@@ -249,6 +264,10 @@ struct BuyAgainView: View {
                 storageLocation: package.storageLocation,
                 notes: package.notes
             )
+            isSaving = true
+            if product.barcode == nil, let barcode, !barcode.isEmpty {
+                product.barcode = barcode
+            }
             modelContext.insert(newPackage)
             PackageDraft.rememberLocation(package.storageLocation)
             onSaved(newPackage)
@@ -331,6 +350,7 @@ struct AddGroceryView: View {
             }
             .navigationTitle("Add Groceries")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneButton()
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search saved products")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

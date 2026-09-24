@@ -3,6 +3,7 @@
 //  Pantry Ping
 //
 
+import AVFoundation
 import SwiftData
 import SwiftUI
 import Vision
@@ -25,6 +26,13 @@ struct ScanBarcodeView: View {
     // Where to go once the barcode is resolved. Setting it pushes the next screen.
     @State private var route: Route?
     @State private var message: String?
+    @State private var camera = CameraState.checking
+
+    // The live scanner needs camera permission. VisionKit reports it as unavailable until
+    // access is granted, so the app asks first and then checks again.
+    enum CameraState {
+        case checking, ready, denied, unavailable
+    }
 
     enum Route: Hashable {
         case buyAgain(Product)
@@ -33,9 +41,13 @@ struct ScanBarcodeView: View {
 
     var body: some View {
         List {
-            if BarcodeCamera.isAvailable {
+            switch camera {
+            case .checking:
+                EmptyView()
+            case .ready:
                 Section {
-                    BarcodeCamera { code in handle(code) }
+                    // Paused while another screen is on top, so the camera isn't left running.
+                    BarcodeCamera(isActive: route == nil) { code in handle(code) }
                         .frame(height: 260)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .listRowInsets(EdgeInsets())
@@ -45,9 +57,18 @@ struct ScanBarcodeView: View {
                 } footer: {
                     Text("Point the camera at the barcode on the package.")
                 }
-            } else {
+            case .denied:
                 Section {
-                    Label("The camera scanner isn't available here (for example, in the Simulator). Type the number under the barcode instead.",
+                    Label("Camera access is off for Pantry Ping, so it can't scan. Type the number under the barcode, or turn the camera on in Settings.",
+                          systemImage: "camera.badge.ellipsis")
+                        .foregroundStyle(.secondary)
+                    if let settings = URL(string: UIApplication.openSettingsURLString) {
+                        Link("Open Settings", destination: settings)
+                    }
+                }
+            case .unavailable:
+                Section {
+                    Label("This device can't scan barcodes with the camera (for example, the Simulator). Type the number under the barcode instead.",
                           systemImage: "barcode.viewfinder")
                         .foregroundStyle(.secondary)
                 }
@@ -58,10 +79,10 @@ struct ScanBarcodeView: View {
                     TextField("Barcode number", text: $typedCode)
                         .keyboardType(.numberPad)
                         .accessibilityLabel("Barcode number")
-                    Button("Look Up") { handle(typedCode) }
+                    Button("Look Up") { handle(typedCode.filter(\.isNumber)) }
                         .disabled(typedCode.filter(\.isNumber).count < 8 || isLookingUp)
                 }
-                if isLookingUp && !BarcodeCamera.isAvailable {
+                if isLookingUp && camera != .ready {
                     HStack {
                         ProgressView()
                         Text("Looking up…").foregroundStyle(.secondary)
@@ -81,6 +102,7 @@ struct ScanBarcodeView: View {
         }
         .navigationTitle("Scan Barcode")
         .navigationBarTitleDisplayMode(.inline)
+        .keyboardDoneButton()
         .navigationDestination(item: $route) { route in
             switch route {
             case .buyAgain(let product):
@@ -90,6 +112,21 @@ struct ScanBarcodeView: View {
             }
         }
         .onDisappear { lookupTask?.cancel() }
+        .task { camera = await Self.checkCamera() }
+    }
+
+    // Asks for camera access the first time, then decides what the screen can offer.
+    static func checkCamera() async -> CameraState {
+        guard DataScannerViewController.isSupported else { return .unavailable }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .notDetermined:
+            let granted = await AVCaptureDevice.requestAccess(for: .video)
+            return granted && DataScannerViewController.isAvailable ? .ready : .denied
+        case .authorized:
+            return DataScannerViewController.isAvailable ? .ready : .unavailable
+        default:
+            return .denied
+        }
     }
 
     private var lookupOverlay: some View {
@@ -101,9 +138,20 @@ struct ScanBarcodeView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
+    // Product barcodes (EAN-8, UPC-A, EAN-13, GTIN-14) are 8, 12, 13, or 14 digits.
+    private static let barcodeLengths: Set<Int> = [8, 12, 13, 14]
+
     private func handle(_ rawCode: String) {
-        let code = rawCode.filter(\.isNumber)
-        guard code.count >= 8, !isLookingUp, route == nil else { return }
+        // Only digits count; anything else (like a lot-number label) isn't a product barcode.
+        let trimmed = rawCode.trimmingCharacters(in: .whitespaces)
+        guard trimmed.allSatisfy(\.isNumber) else { return }
+        let code = trimmed
+        guard Self.barcodeLengths.contains(code.count), !isLookingUp, route == nil else {
+            if !Self.barcodeLengths.contains(code.count) && !code.isEmpty {
+                message = "That doesn't look like a product barcode. They have 8, 12, 13, or 14 digits."
+            }
+            return
+        }
         message = nil
 
         // Already saved? Buying again needs no lookup at all.
@@ -134,16 +182,14 @@ struct ScanBarcodeView: View {
 // Apple's live barcode scanner (VisionKit), wrapped for SwiftUI.
 // UIViewControllerRepresentable is the bridge that lets a UIKit screen appear in SwiftUI.
 struct BarcodeCamera: UIViewControllerRepresentable {
-    // Needs a real iPhone with a camera; the Simulator can't scan.
-    static var isAvailable: Bool {
-        DataScannerViewController.isSupported && DataScannerViewController.isAvailable
-    }
-
+    // Scans only while true (e.g. not while the next screen is showing).
+    let isActive: Bool
     let onScan: (String) -> Void
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
+        // Grocery barcodes only (UPC/EAN), so lot-number or shipping labels aren't picked up.
         let scanner = DataScannerViewController(
-            recognizedDataTypes: [.barcode(symbologies: [.ean13, .ean8, .upce, .code128])],
+            recognizedDataTypes: [.barcode(symbologies: [.ean13, .ean8, .upce])],
             qualityLevel: .balanced,
             recognizesMultipleItems: false,
             isHighFrameRateTrackingEnabled: false,
@@ -154,8 +200,12 @@ struct BarcodeCamera: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {
-        if !scanner.isScanning {
+        // Keep the coordinator's callback current with this render's closure.
+        context.coordinator.onScan = onScan
+        if isActive && !scanner.isScanning {
             try? scanner.startScanning()
+        } else if !isActive && scanner.isScanning {
+            scanner.stopScanning()
         }
     }
 
@@ -169,7 +219,7 @@ struct BarcodeCamera: UIViewControllerRepresentable {
 
     // The scanner reports what it sees through a delegate object.
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
-        let onScan: (String) -> Void
+        var onScan: (String) -> Void
         init(onScan: @escaping (String) -> Void) {
             self.onScan = onScan
         }

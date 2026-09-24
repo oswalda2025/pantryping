@@ -92,23 +92,4 @@ nonisolated enum MeasureUnit: String, CaseIterable, Identifiable {
         case .portion: return isOne ? "portion" : "portions"
         }
     }
-
-    // Name for pickers.
-    var pickerName: String {
-        switch self {
-        case .gram: "grams (g)"
-        case .kilogram: "kilograms (kg)"
-        case .ounce: "ounces (oz)"
-        case .pound: "pounds (lb)"
-        case .milliliter: "milliliters (ml)"
-        case .liter: "liters (l)"
-        case .cup: "cups"
-        case .tablespoon: "tablespoons (tbsp)"
-        case .teaspoon: "teaspoons (tsp)"
-        case .fluidOunce: "fluid ounces (fl oz)"
-        case .piece: "pieces"
-        case .serving: "servings"
-        case .portion: "portions"
-        }
-    }
 }

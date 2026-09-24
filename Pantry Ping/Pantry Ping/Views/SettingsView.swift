@@ -68,13 +68,18 @@ struct SettingsView: View {
                          : "Scanning checks USDA FoodData Central with your key, then Open Food Facts. Only the barcode number is sent.")
                 }
 
+                // Developer-only: in the real app this would mix fake groceries (and Food Log
+                // entries) into real data with no easy way to remove them. New users still get
+                // "Try Sample Groceries" on the empty Kitchen screen.
+                #if DEBUG
                 Section {
                     Button("Add Sample Groceries") {
                         SampleData.insertSampleGroceries(into: modelContext)
                     }
                 } footer: {
-                    Text("Adds a set of demo groceries so you can explore the app.")
+                    Text("Developer builds only. Adds demo groceries to your real data.")
                 }
+                #endif
 
                 Section("About") {
                     Text(FoodState.disclaimer)

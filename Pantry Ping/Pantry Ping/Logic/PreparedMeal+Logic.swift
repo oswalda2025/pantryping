@@ -225,7 +225,8 @@ enum MealPrep {
         }
 
         // 2. Create the meal.
-        let meal = PreparedMeal(name: name, preparedDate: preparedDate, storageLocation: storageLocation)
+        // Stored at noon, like every other calendar-day date in the app.
+        let meal = PreparedMeal(name: name, preparedDate: CalendarDay.noon(preparedDate), storageLocation: storageLocation)
         meal.totalPortions = portions
         meal.totalWeightGrams = weight
         meal.quantityUnitRaw = (weight != nil ? MeasureUnit.gram : MeasureUnit.portion).rawValue
